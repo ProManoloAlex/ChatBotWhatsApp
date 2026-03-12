@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="automatizacion.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="0"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="4862"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="configuracion" custom_title="0" dock_id="1" table="4,13:mainconfiguracion"/><dock_state state="000000ff00000000fd0000000100000002000005bb00000390fc0100000001fb000000160064006f0063006b00420072006f00770073006500310100000000000005bb0000011e00ffffff000002690000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings/></tab_browse><tab_sql><sql name="SQL 1*">-- =====================================================
+-- TABLA PRINCIPAL DE PEDIDOS
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS pedidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    whatsapp TEXT NOT NULL,              -- numero del cliente
+    tipo_archivo TEXT NOT NULL,          -- documento / imagen
+    nombre_archivo TEXT NOT NULL,        -- archivo enviado
+    ruta_local TEXT NOT NULL,            -- ruta donde se guarda
+
+    formato TEXT DEFAULT 'CARTA',        -- CARTA / 1-2 / 1-4 / 1-8 / 1-35
+    paginas_seleccionadas TEXT,          -- ejemplo: &quot;1,3-5&quot;
+    
+    color TEXT DEFAULT 'blanco_negro',   -- color / blanco_negro
+    copias INTEGER DEFAULT 1,            -- numero de copias
+
+    hojas_totales INTEGER DEFAULT 1,     -- hojas finales que se imprimen
+    imagenes_por_hoja INTEGER DEFAULT 1, -- para imagenes (1,2,4,8)
+
+    estado TEXT DEFAULT 'PENDIENTE',     -- PENDIENTE / PROCESANDO / IMPRESO / CANCELADO
+
+    monto_pago REAL DEFAULT 0.0,         -- precio final
+
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- TABLA DE CONFIGURACION DEL SISTEMA
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS configuracion (
+    parametro TEXT PRIMARY KEY,
+    valor TEXT
+);
+
+-- =====================================================
+-- CONFIGURACIONES INICIALES
+-- =====================================================
+
+INSERT OR IGNORE INTO configuracion (parametro, valor) VALUES ('tiempo_cancelacion', '120');
+INSERT OR IGNORE INTO configuracion (parametro, valor) VALUES ('precio_bn', '1');
+INSERT OR IGNORE INTO configuracion (parametro, valor) VALUES ('precio_color', '2');
+
+-- =====================================================
+-- DATOS DE PRUEBA
+-- =====================================================
+
+-- Pedido 1: Documento blanco y negro
+INSERT INTO pedidos
+(whatsapp, tipo_archivo, nombre_archivo, ruta_local, formato, color, copias, hojas_totales, estado, monto_pago)
+VALUES
+('+5213311111111', 'documento', 'tarea_matematicas.pdf', 'C:/ciber/pedidos/tarea_matematicas.pdf',
+'CARTA', 'blanco_negro', 1, 3, 'PENDIENTE', 3);
+
+
+-- Pedido 2: Imagen a media hoja (2 por hoja)
+INSERT INTO pedidos
+(whatsapp, tipo_archivo, nombre_archivo, ruta_local, formato, color, copias, imagenes_por_hoja, hojas_totales, estado, monto_pago)
+VALUES
+('+5213322222222', 'imagen', 'foto_familiar.jpg', 'C:/ciber/pedidos/foto_familiar.jpg',
+'1-2', 'color', 1, 2, 1, 'PROCESANDO', 2);
+
+
+-- Pedido 3: Imagen 1/4 (4 por hoja)
+INSERT INTO pedidos
+(whatsapp, tipo_archivo, nombre_archivo, ruta_local, formato, color, copias, imagenes_por_hoja, hojas_totales, estado, monto_pago)
+VALUES
+('+5213333333333', 'imagen', 'selfie.jpg', 'C:/ciber/pedidos/selfie.jpg',
+'1-4', 'color', 1, 4, 1, 'IMPRESO', 2);
+
+
+-- Pedido 4: Documento con paginas seleccionadas
+INSERT INTO pedidos
+(whatsapp, tipo_archivo, nombre_archivo, ruta_local, formato, paginas_seleccionadas, color, copias, hojas_totales, estado, monto_pago)
+VALUES
+('+5213344444444', 'documento', 'manual.pdf', 'C:/ciber/pedidos/manual.pdf',
+'CARTA', '1,3-5', 'blanco_negro', 1, 4, 'PENDIENTE', 4);
+
+
+-- Pedido 5: Pedido cancelado
+INSERT INTO pedidos
+(whatsapp, tipo_archivo, nombre_archivo, ruta_local, formato, color, copias, estado)
+VALUES
+('+5213355555555', 'imagen', 'foto_cancelada.jpg', 'C:/ciber/pedidos/foto_cancelada.jpg',
+'1-8', 'blanco_negro', 1, 'CANCELADO');</sql><current_tab id="0"/></tab_sql></sqlb_project>
