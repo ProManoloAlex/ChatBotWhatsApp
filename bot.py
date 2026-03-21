@@ -5,6 +5,7 @@ from selenium.webdriver.chrome.options import Options
 from menu import procesar_mensaje
 from archivos.detectar import es_archivo
 from archivos.descargar import descargar_archivo
+from archivos.convertir import procesar_imagen, procesar_pdf, procesar_word, limpiar_archivos_viejos
 from database import crear_pedido
 import time
 import os
@@ -30,6 +31,7 @@ def iniciar_bot():
     while True:
         try:
             driver.find_element(By.ID, "pane-side")
+            limpiar_archivos_viejos()
             print("WhatsApp cargado correctamente")
             break
         except:
@@ -71,35 +73,50 @@ def iniciar_bot():
                     #print(ultimo.get_attribute("outerHTML"))
                     #print("------------------")
 
+
                     # -----------------------------
                     # DETECTAR ARCHIVO
                     # -----------------------------
                     if es_archivo(ultimo):
-
                         print("ARCHIVO DETECTADO")
+                                      
+                        #Descargar archivos      
+                        nombre, ruta = descargar_archivo(ultimo)
+                        if nombre:
+                            extension = nombre.split(".")[-1].lower()
+                            
+                          #Detecta que tipo de archivo y lo convierte en pdf-
+                            if extension in ["jpg", "jpeg", "png"]:
+                                 tipo = "imagen"
+                                 procesado = procesar_imagen(ruta, "1", 0)  # formato default
+                            
+                            elif extension == "pdf":
+                                 tipo = "documento"
+                                 procesado = procesar_pdf(ruta, "TODO", 0)
+                            
+                            elif extension in ["doc", "docx"]:
+                                 tipo = "documento"
+                                 procesado = procesar_word(ruta, 0)
+                            
+                            else:
+                                 tipo = "documento"
+                                 procesado = False
+                                
+                            
+                            crear_pedido(
+                                "cliente_whatsapp",
+                                tipo,
+                                nombre,
+                                ruta
+                            )
+                            print("Pedido guardado en la base de datos")    
                         
-                        
-                    nombre, ruta = descargar_archivo(ultimo)
-                
-                    if nombre:
-                
-                        extension = nombre.split(".")[-1].lower()
-                
-                        if extension in ["jpg", "jpeg", "png"]:
-                            tipo = "imagen"
-                        else:
-                            tipo = "documento"
-    
-                        crear_pedido(
-                            "cliente_whatsapp",
-                            tipo,
-                            nombre,
-                            ruta
-                        )
-                        print("Pedido guardado en la base de datos")
-                        
-                        
-                        
+                            if procesado:
+                                print("Archivo convertido correctamente")
+                            else:
+                                print("Error al convertir archivo")
+                    
+
                     # -----------------------------
                     # PROCESAR MENSAJE
                     # -----------------------------
@@ -107,8 +124,9 @@ def iniciar_bot():
                         respuesta = procesar_mensaje(texto)
                         if respuesta:
                             caja = driver.find_element(
-                                By.CSS_SELECTOR, "div[contenteditable='true']"
-                            )
+                                By.XPATH, "//footer//div[@role='textbox']"
+                                )
+
                             caja.send_keys(respuesta)
                             caja.send_keys(Keys.ENTER)
                             print("Respuesta enviada")

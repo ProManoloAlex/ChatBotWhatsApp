@@ -5,11 +5,10 @@ def menu_principal():
 MENU DE IMPRESIONES
 
 1 Imprimir documento
-2 Imprimir imagen
-3 Escanear documento
-4 Ver pedido
+2 Imprimir imagen  
+3 Escanear documento  
+4 Ver pedido    
 5 Cancelar pedido
-
 Escribe el numero de la opcion que deseas
 """
 
@@ -65,20 +64,15 @@ def procesar_mensaje(mensaje, usuario="cliente"):
         if mensaje == "1":
             estado_usuario[usuario] = "TIPO_DOCUMENTO"
             return menu_documento()
-
         elif mensaje == "2":
             estado_usuario[usuario] = "TIPO_IMAGEN"
             return menu_imagen()
-
         elif mensaje == "3":
             return "El servicio de escaneo cuesta $2 por hoja."
-
         elif mensaje == "4":
             return "Escribe el numero de tu pedido para consultarlo."
-
         elif mensaje == "5":
             return "Escribe el numero de pedido que deseas cancelar."
-
 
     # -----------------------
     # TIPO DOCUMENTO
@@ -88,19 +82,28 @@ def procesar_mensaje(mensaje, usuario="cliente"):
         if mensaje == "1":
             estado_usuario[usuario] = "ESPERANDO_ARCHIVO"
             return """
-Impresion en blanco y negro seleccionada.
-
-Ahora envia tu archivo PDF o documento.
-"""
-
+            Impresion en blanco y negro seleccionada.
+            Ahora envia tu archivo PDF o documento.
+            """
         elif mensaje == "2":
             estado_usuario[usuario] = "ESPERANDO_ARCHIVO"
             return """
-Impresion a color seleccionada.
-
-Ahora envia tu archivo PDF o documento.
-"""
-
+            Impresion a color seleccionada.
+            Ahora envia tu archivo PDF o documento.
+            """
+    # -----------------------
+    # ESPERANDO ARCHIVO
+    # -----------------------
+    if estado == "ESPERANDO_ARCHIVO":
+    
+        estado_usuario[usuario] = "ESPERANDO_PAGINAS"
+    
+        return """
+        Archivo recibido correctamente.
+    
+        Ahora escribe las paginas que deseas imprimir.
+        Ejemplo: 1-5 o 2,4,6
+        """
 
     # -----------------------
     # TIPO IMAGEN
@@ -110,10 +113,9 @@ Ahora envia tu archivo PDF o documento.
         if mensaje in ["1","2","3","4"]:
             estado_usuario[usuario] = "ESPERANDO_ARCHIVO"
             return """
-Formato seleccionado.
-
-Ahora envia la imagen que deseas imprimir.
-"""
+            Formato seleccionado.
+            Ahora envia la imagen que deseas imprimir.
+            """
 
 
     # -----------------------
@@ -124,9 +126,8 @@ Ahora envia la imagen que deseas imprimir.
         estado_usuario[usuario] = "PEDIDO_CONFIRMADO"
 
         return f"""
-Paginas seleccionadas: {mensaje}
-
-{pedido_recibido()}
-"""
+        Paginas seleccionadas: {mensaje}
+        {pedido_recibido()}
+        """
 
     return None

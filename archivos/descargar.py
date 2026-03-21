@@ -10,7 +10,6 @@ CARPETA_DESTINO = "C:/Users/ProManoloAlex/Documents/Ciber/archivos_recibidos"
 if not os.path.exists(CARPETA_DESTINO):
     os.makedirs(CARPETA_DESTINO)
 
-
 def descargar_archivo(mensaje):
     try:
         print("Buscando boton de descarga...")
