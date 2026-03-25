@@ -1,0 +1,120 @@
+////////////////////////////////
+UninstallName
+GSview 5.0
+
+////////////////////////////////
+RegistryNew
+REGEDIT4
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Ghostgum]
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Ghostgum\GSview]
+"5.0"="C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\App Paths\gsview64.exe]
+@="C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora\\gsview\\gsview64.exe"
+"Path"="C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora\\gsview"
+
+[HKEY_CLASSES_ROOT\.ps]
+@="psfile"
+"Content Type"="application/postscript"
+
+[HKEY_CLASSES_ROOT\.eps]
+@="psfile"
+"Content Type"="application/postscript"
+
+[HKEY_CLASSES_ROOT\MIME\Database\Content Type\application/postscript]
+"Extension"=".ps"
+
+[HKEY_CLASSES_ROOT\psfile]
+@="PostScript"
+
+[HKEY_CLASSES_ROOT\psfile\shell]
+
+[HKEY_CLASSES_ROOT\psfile\shell\open]
+
+[HKEY_CLASSES_ROOT\psfile\shell\open\command]
+@=""C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora\\gsview\\gsview64.exe" "%1""
+
+[HKEY_CLASSES_ROOT\psfile\shell\print]
+
+[HKEY_CLASSES_ROOT\psfile\shell\print\command]
+@=""C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora\\gsview\\gsview64.exe" /p "%1""
+
+[HKEY_CLASSES_ROOT\psfile\DefaultIcon]
+@="C:\\Users\\ProManoloAlex\\Documents\\Ciber\\Impresora\\gsview\\gsview64.exe,3"
+
+////////////////////////////////
+RegistryOld
+REGEDIT4
+
+[HKEY_CLASSES_ROOT\.ps]
+"Content Type"="application/postscript"
+
+[HKEY_CLASSES_ROOT\.eps]
+"Content Type"="application/postscript"
+
+[HKEY_CLASSES_ROOT\MIME\Database\Content Type\application/postscript]
+"Extension"=".ps"
+
+////////////////////////////////
+ShellNew
+Group=C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Ghostgum
+
+Name=C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Ghostgum\GSview 5.0.LNK
+Path=C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsview64.exe
+Description=GSview 5.0
+Arguments=
+
+Name=C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Ghostgum\GSview Readme 5.0.LNK
+Path=C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\Readme.htm
+Description=GSview Readme 5.0
+
+
+////////////////////////////////
+ShellOld
+
+////////////////////////////////
+FileNew
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\pstotext\pstotext.1
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\pstotext\pstotext.txt
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\pstotext\pstotxt3.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\pstotext\pstotxt3.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsview64.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewct.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewde.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewen.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewes.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewfr.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewgr.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewit.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewnl.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewru.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewsk.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsviewse.chm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64ct.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64de.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64es.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64fr.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64gr.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64it.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64nl.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64ru.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64sk.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvw64se.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gvwgs64.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsvwrg64.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\uninstgs.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\printer.ini
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsview64.ini
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\zlib64.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\libbz2.dll
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsprint.exe
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsprint.htm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\epstool.htm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\Readme.htm
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\gsview.css
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\regorder.txt
+C:\Users\ProManoloAlex\Documents\Ciber\Impresora\gsview\LICENCE
+
+////////////////////////////////
