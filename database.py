@@ -1,6 +1,11 @@
 import sqlite3
+import os
 
-DB_NAME = "C:/Users/ProManoloAlex/Documents/Ciber/automatizacion.db"
+# 1. Obtiene la ruta de la carpeta donde está tu script de Python
+DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Une esa ruta con el nombre del archivo de la base de datos
+DB_NAME = os.path.join(DIRECTORIO_ACTUAL, "automatizacion.db")
 
 def conectar():
     return sqlite3.connect(DB_NAME)
@@ -8,14 +13,16 @@ def conectar():
 # ---------------------------------
 # CREAR PEDIDO (cuando llega archivo)
 # ---------------------------------
-def crear_pedido(whatsapp, tipo_archivo, nombre_archivo, ruta_local):
+def crear_pedido(whatsapp, tipo_archivo, nombre_archivo, ruta_local, color):
     conn = conectar()
     cursor = conn.cursor()
+
     cursor.execute("""
         INSERT INTO pedidos
-        (whatsapp, tipo_archivo, nombre_archivo, ruta_local)
-        VALUES (?, ?, ?, ?)
-    """, (whatsapp, tipo_archivo, nombre_archivo, ruta_local))
+        (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, estado)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, "PENDIENTE"))
+
     conn.commit()
     conn.close()
 

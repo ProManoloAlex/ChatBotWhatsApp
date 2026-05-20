@@ -2,18 +2,19 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from menu import procesar_mensaje
-from archivos.detectar import es_archivo
-from archivos.descargar import descargar_archivo
-from archivos.convertir import procesar_imagen, procesar_pdf, procesar_word, limpiar_archivos_viejos
-from database import crear_pedido
+from selenium.common.exceptions import WebDriverException, InvalidSessionIdException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from menu import procesar_mensaje, estado_usuario
+from archivos.convertir import limpiar_archivos_viejos
 import time
 import os
 
-
 def iniciar_bot():
-
-    CARPETA_SESION = "C:/Users/ProManoloAlex/Documents/Ciber/SesionBot"
+    
+    
+    DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+    CARPETA_SESION = os.path.join(DIRECTORIO_ACTUAL, "SesionBot")
 
     if not os.path.exists(CARPETA_SESION):
         os.makedirs(CARPETA_SESION)
@@ -21,22 +22,28 @@ def iniciar_bot():
     chrome_options = Options()
     chrome_options.add_argument(f"user-data-dir={CARPETA_SESION}")
 
-    driver = webdriver.Chrome(options=chrome_options)
-
-    driver.get("https://web.whatsapp.com")
-
-    print("Escanea el QR si es necesario...")
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.get("https://web.whatsapp.com")
+    except Exception as e:
+        print(f"No se pudo iniciar el navegador: {e}")
+        return    
+        
+    #print("Escanea el QR si es necesario...")
 
     # esperar a que cargue WhatsApp
     while True:
         try:
-            driver.find_element(By.ID, "pane-side")
+            WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "pane-side")))
             limpiar_archivos_viejos()
-            print("WhatsApp cargado correctamente")
+            #print("WhatsApp cargado correctamente")
             break
+        except (InvalidSessionIdException, WebDriverException):
+            print("\n[!] El navegador se cerró antes de cargar WhatsApp.")
+            return # Salimos de la función
         except:
             time.sleep(2)
-
+            
     ultimo_mensaje = ""
 
     while True:
@@ -57,14 +64,14 @@ def iniciar_bot():
                 if not texto:
                     texto = ultimo.text.strip()
 
-                print("Texto detectado:", texto)
+                #print("Texto detectado:", texto)
 
                 # verificar si es mensaje nuevo
                 if texto != ultimo_mensaje:
 
                     ultimo_mensaje = texto
 
-                    print("Nuevo mensaje detectado")
+                    #print("Nuevo mensaje detectado")
 
                     # -----------------------------
                     # DEPURACION
@@ -72,50 +79,19 @@ def iniciar_bot():
                     #print("HTML MENSAJE:")
                     #print(ultimo.get_attribute("outerHTML"))
                     #print("------------------")
+                            
+                    usuario = "cliente"
 
-
-                    # -----------------------------
-                    # DETECTAR ARCHIVO
-                    # -----------------------------
-                    if es_archivo(ultimo):
-                        print("ARCHIVO DETECTADO")
-                                      
-                        #Descargar archivos      
-                        nombre, ruta = descargar_archivo(ultimo)
-                        if nombre:
-                            extension = nombre.split(".")[-1].lower()
-                            
-                          #Detecta que tipo de archivo y lo convierte en pdf-
-                            if extension in ["jpg", "jpeg", "png"]:
-                                 tipo = "imagen"
-                                 procesado = procesar_imagen(ruta, "1", 0)  # formato default
-                            
-                            elif extension == "pdf":
-                                 tipo = "documento"
-                                 procesado = procesar_pdf(ruta, "TODO", 0)
-                            
-                            elif extension in ["doc", "docx"]:
-                                 tipo = "documento"
-                                 procesado = procesar_word(ruta, 0)
-                            
-                            else:
-                                 tipo = "documento"
-                                 procesado = False
-                                
-                            
-                            crear_pedido(
-                                "cliente_whatsapp",
-                                tipo,
-                                nombre,
-                                ruta
-                            )
-                            print("Pedido guardado en la base de datos")    
-                        
-                            if procesado:
-                                print("Archivo convertido correctamente")
-                            else:
-                                print("Error al convertir archivo")
-                    
+                    # inicializar si no existe
+                    if usuario not in estado_usuario:
+                        estado_usuario[usuario] = {
+                                    "estado": "INICIO",
+                                    "tipo_archivo": None,
+                                    "color": None,
+                                    "paginas": None,
+                                    "archivo": None,
+                                    "pedido_estado": None
+                                }
 
                     # -----------------------------
                     # PROCESAR MENSAJE
@@ -129,12 +105,19 @@ def iniciar_bot():
 
                             caja.send_keys(respuesta)
                             caja.send_keys(Keys.ENTER)
-                            print("Respuesta enviada")
+                            #print("Respuesta enviada")
                             time.sleep(1)
 
             time.sleep(2)
 
+        # CAPTURA DE CIERRE DE VENTANA
+        except (InvalidSessionIdException, WebDriverException):
+            print("\n" + "="*40)
+            print("AVISO: El navegador fue cerrado o se perdió la conexión.")
+            print("Deteniendo el bot de forma segura...")
+            print("="*40)
+            break # Rompe el bucle principal y termina el script
         except Exception as e:
-
-            print("Error en el bucle:", e)
-            time.sleep(5)
+                print(f"Error inesperado en el bucle: {e}")
+                time.sleep(5)
+                
