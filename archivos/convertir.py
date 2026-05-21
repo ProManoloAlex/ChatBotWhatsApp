@@ -7,7 +7,11 @@ from docx2pdf import convert
 from database import obtener_pedidos_pendientes, actualizar_estado
 
 
-CARPETA_SALIDA = "C:/Users/ProManoloAlex/Documents/Ciber/Listos_Para_Imprimir/"
+# 1. Detecta la carpeta raíz del proyecto (D:/Codigo/ChatBotWhatsApp)
+DIRECTORIO_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 2. Crea la carpeta "Listos_Para_Imprimir" dentro de tu propio proyecto en el disco D:
+CARPETA_SALIDA = os.path.join(DIRECTORIO_PROYECTO, "Listos_Para_Imprimir")
 
 if not os.path.exists(CARPETA_SALIDA):
     os.makedirs(CARPETA_SALIDA)
