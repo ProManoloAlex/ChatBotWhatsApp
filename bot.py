@@ -12,7 +12,6 @@ import os
 
 def iniciar_bot():
     
-    
     DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
     CARPETA_SESION = os.path.join(DIRECTORIO_ACTUAL, "SesionBot")
 
@@ -29,18 +28,15 @@ def iniciar_bot():
         print(f"No se pudo iniciar el navegador: {e}")
         return    
         
-    #print("Escanea el QR si es necesario...")
-
-    # esperar a que cargue WhatsApp
+    # Esperar a que cargue WhatsApp
     while True:
         try:
             WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "pane-side")))
             limpiar_archivos_viejos()
-            #print("WhatsApp cargado correctamente")
             break
         except (InvalidSessionIdException, WebDriverException):
             print("\n[!] El navegador se cerró antes de cargar WhatsApp.")
-            return # Salimos de la función
+            return
         except:
             time.sleep(2)
             
@@ -48,13 +44,22 @@ def iniciar_bot():
 
     while True:
         try:
-            # obtener todos los mensajes
+            # ✅ NUEVO: Detectar chats con mensajes no leídos y hacer clic en el primero
+            chats_sin_leer = driver.find_elements(
+                By.XPATH, "//div[@id='pane-side']//span[@data-testid='icon-unread-count']/.."
+            )
+
+            if chats_sin_leer:
+                chats_sin_leer[0].click()  # Abre el primer chat con mensajes nuevos
+                time.sleep(1)             # Espera a que carguen los mensajes
+
+            # Obtener todos los mensajes del chat abierto
             mensajes = driver.find_elements(By.CSS_SELECTOR, "div.message-in, div.message-out")
             if mensajes:
                 ultimo = mensajes[-1]
                 texto = ""
 
-                # intentar obtener texto
+                # Intentar obtener texto
                 try:
                     span = ultimo.find_element(By.CSS_SELECTOR, "span[data-testid='selectable-text']")
                     texto = span.text.strip()
@@ -64,60 +69,43 @@ def iniciar_bot():
                 if not texto:
                     texto = ultimo.text.strip()
 
-                #print("Texto detectado:", texto)
+                # Verificar si es mensaje nuevo entrante (message-in) y texto distinto
+                es_mensaje_entrante = "message-in" in ultimo.get_attribute("class")
 
-                # verificar si es mensaje nuevo
-                if texto != ultimo_mensaje:
+                if texto and texto != ultimo_mensaje and es_mensaje_entrante:
 
                     ultimo_mensaje = texto
 
-                    #print("Nuevo mensaje detectado")
-
-                    # -----------------------------
-                    # DEPURACION
-                    # -----------------------------
-                    #print("HTML MENSAJE:")
-                    #print(ultimo.get_attribute("outerHTML"))
-                    #print("------------------")
-                            
                     usuario = "cliente"
 
-                    # inicializar si no existe
                     if usuario not in estado_usuario:
                         estado_usuario[usuario] = {
-                                    "estado": "INICIO",
-                                    "tipo_archivo": None,
-                                    "color": None,
-                                    "paginas": None,
-                                    "archivo": None,
-                                    "pedido_estado": None
-                                }
+                            "estado": "INICIO",
+                            "tipo_archivo": None,
+                            "color": None,
+                            "paginas": None,
+                            "archivo": None,
+                            "pedido_estado": None
+                        }
 
-                    # -----------------------------
-                    # PROCESAR MENSAJE
-                    # -----------------------------
-                    if texto:
-                        respuesta = procesar_mensaje(texto)
-                        if respuesta:
-                            caja = driver.find_element(
-                                By.XPATH, "//footer//div[@role='textbox']"
-                                )
-
-                            caja.send_keys(respuesta)
-                            caja.send_keys(Keys.ENTER)
-                            #print("Respuesta enviada")
-                            time.sleep(1)
+                    # Procesar mensaje
+                    respuesta = procesar_mensaje(texto)
+                    if respuesta:
+                        caja = driver.find_element(
+                            By.XPATH, "//footer//div[@role='textbox']"
+                        )
+                        caja.send_keys(respuesta)
+                        caja.send_keys(Keys.ENTER)
+                        time.sleep(1)
 
             time.sleep(2)
 
-        # CAPTURA DE CIERRE DE VENTANA
         except (InvalidSessionIdException, WebDriverException):
             print("\n" + "="*40)
             print("AVISO: El navegador fue cerrado o se perdió la conexión.")
             print("Deteniendo el bot de forma segura...")
             print("="*40)
-            break # Rompe el bucle principal y termina el script
+            break
         except Exception as e:
-                print(f"Error inesperado en el bucle: {e}")
-                time.sleep(5)
-                
+            print(f"Error inesperado en el bucle: {e}")
+            time.sleep(5)
