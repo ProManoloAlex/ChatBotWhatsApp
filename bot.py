@@ -40,18 +40,18 @@ def iniciar_bot():
         except:
             time.sleep(2)
             
-    ultimo_mensaje = ""
+    ultimo_msg_id = ""
 
     while True:
         try:
-            # ✅ NUEVO: Detectar chats con mensajes no leídos y hacer clic en el primero
+            # Detectar chats con mensajes no leídos y hacer clic en el primero
             chats_sin_leer = driver.find_elements(
                 By.XPATH, "//div[@id='pane-side']//span[@data-testid='icon-unread-count']/.."
             )
 
             if chats_sin_leer:
-                chats_sin_leer[0].click()  # Abre el primer chat con mensajes nuevos
-                time.sleep(1)             # Espera a que carguen los mensajes
+                chats_sin_leer[0].click()
+                time.sleep(1)
 
             # Obtener todos los mensajes del chat abierto
             mensajes = driver.find_elements(By.CSS_SELECTOR, "div.message-in, div.message-out")
@@ -69,12 +69,23 @@ def iniciar_bot():
                 if not texto:
                     texto = ultimo.text.strip()
 
-                # Verificar si es mensaje nuevo entrante (message-in) y texto distinto
+                # Verificar si es mensaje entrante
                 es_mensaje_entrante = "message-in" in ultimo.get_attribute("class")
 
-                if texto and texto != ultimo_mensaje and es_mensaje_entrante:
+                # ✅ Buscar data-id dentro del mensaje
+                try:
+                    msg_id = ultimo.find_element(By.CSS_SELECTOR, "[data-id]").get_attribute("data-id")
+                except:
+                    msg_id = None
 
-                    ultimo_mensaje = texto
+                # ✅ Si no hay data-id usar posicion + texto como ID unico
+                if not msg_id:
+                    msg_id = f"{len(mensajes)}_{texto}"
+
+                print(f"[DEBUG] Texto: '{texto}' | msg_id: '{msg_id}' | entrante: {es_mensaje_entrante}")
+
+                if texto and msg_id != ultimo_msg_id and es_mensaje_entrante:
+                    ultimo_msg_id = msg_id
 
                     usuario = "cliente"
 
