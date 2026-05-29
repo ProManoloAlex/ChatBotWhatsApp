@@ -13,16 +13,14 @@ def conectar():
 # ---------------------------------
 # CREAR PEDIDO (cuando llega archivo)
 # ---------------------------------
-def crear_pedido(whatsapp, tipo_archivo, nombre_archivo, ruta_local, color):
+def crear_pedido(whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, paginas, formato="CARTA", copias=1):
     conn = conectar()
     cursor = conn.cursor()
-
     cursor.execute("""
         INSERT INTO pedidos
-        (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, estado)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, "PENDIENTE"))
-
+        (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, paginas_seleccionadas, formato, copias, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (whatsapp, tipo_archivo, nombre_archivo, ruta_local, color, paginas, formato, copias, "PENDIENTE"))
     conn.commit()
     conn.close()
 

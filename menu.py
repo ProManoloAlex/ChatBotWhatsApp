@@ -1,8 +1,22 @@
 from database import crear_pedido
-from archivos.descargar import *
+import os
 
 estado_usuario = {}
 
+# ===============================
+# RUTAS
+# ===============================
+DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+CARPETA_RECIBIDOS = os.path.join(DIRECTORIO_ACTUAL, "archivos_recibidos")
+CARPETA_LISTOS = os.path.join(DIRECTORIO_ACTUAL, "Listos_Para_Imprimir")
+
+for carpeta in [CARPETA_RECIBIDOS, CARPETA_LISTOS]:
+    if not os.path.exists(carpeta):
+        os.makedirs(carpeta)
+
+# ===============================
+# MENUS
+# ===============================
 def menu_principal():
     return (
         "MENU DE IMPRESIONES\n"
@@ -31,7 +45,10 @@ def menu_imagen():
         "4 Octavo de hoja (8 imagenes por hoja)"
     )
 
-def procesar_mensaje(mensaje, usuario="cliente"):
+# ===============================
+# PROCESAR MENSAJE
+# ===============================
+def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
     mensaje = mensaje.strip().lower()
 
     if usuario not in estado_usuario:
@@ -41,16 +58,22 @@ def procesar_mensaje(mensaje, usuario="cliente"):
             "color": None,
             "paginas": None,
             "archivo": None,
-            "pedido_estado": None
+            "pedido_estado": None,
+            "formato_imagen": None
         }
 
     datos = estado_usuario[usuario]
     estado = datos["estado"]
-    
-    # ✅ AGREGA ESTO
-    print(f"[DEBUG] Mensaje: '{mensaje}' | Estado actual: '{estado}'")
+
+    print(f"[DEBUG] Mensaje: '{mensaje}' | Estado: '{estado}'")
 
     saludos = ["hola", "hola!", "buenas", "buenos dias"]
+
+    # -----------------------
+    # ARCHIVO FUERA DE FLUJO
+    # -----------------------
+    if mensaje == "__archivo__" and estado != "ESPERANDO_ARCHIVO":
+        return "Para enviar un archivo primero selecciona una opcion del menu."
 
     # -----------------------
     # SALUDO
@@ -109,7 +132,9 @@ def procesar_mensaje(mensaje, usuario="cliente"):
     # TIPO IMAGEN
     # -----------------------
     if estado == "TIPO_IMAGEN":
-        if mensaje in ["1", "2", "3", "4"]:
+        formatos = {"1": "CARTA", "2": "1-2", "3": "1-4", "4": "1-8"}
+        if mensaje in formatos:
+            datos["formato_imagen"] = formatos[mensaje]
             datos["estado"] = "ESPERANDO_ARCHIVO"
             return "Formato seleccionado.\nAhora envia la imagen que deseas imprimir."
         else:
@@ -117,10 +142,46 @@ def procesar_mensaje(mensaje, usuario="cliente"):
 
     # -----------------------
     # ESPERANDO ARCHIVO
-    # (texto normal mientras espera archivo)
     # -----------------------
     if estado == "ESPERANDO_ARCHIVO":
-        return "Por favor envia el archivo (PDF o imagen)."
+
+        if mensaje == "__archivo__" and elemento is not None:
+            from archivos.descargar import descargar_archivo
+
+            print("[DEBUG] Intentando descargar archivo...")
+            print("[DEBUG] HTML elemento:", elemento.get_attribute("outerHTML")[:400])
+
+            nombre, ruta = descargar_archivo(elemento)
+            print(f"[DEBUG] Resultado descarga: nombre={nombre} | ruta={ruta}")
+
+            if not nombre or not ruta:
+                return "No se pudo descargar el archivo. Intenta de nuevo."
+
+            extension = nombre.split(".")[-1].lower()
+
+            if extension in ["jpg", "jpeg", "png"]:
+                tipo = "imagen"
+            elif extension in ["pdf", "doc", "docx"]:
+                tipo = "documento"
+            else:
+                return "Formato no compatible.\nEnvia PDF, Word o imagen JPG/PNG."
+
+            datos["archivo"] = {
+                "nombre": nombre,
+                "ruta": ruta,
+                "tipo": tipo
+            }
+            datos["estado"] = "ESPERANDO_PAGINAS"
+            print(f"[DEBUG] Archivo guardado: {nombre} | Ruta: {ruta}")
+
+            return (
+                "Archivo recibido correctamente ✅\n"
+                "Escribe las paginas que deseas imprimir.\n"
+                "Ejemplo: 1-5 o 2,4,6 o todo"
+            )
+
+        else:
+            return "Por favor envia el archivo (PDF o imagen)."
 
     # -----------------------
     # ESPERANDO PAGINAS
@@ -134,24 +195,27 @@ def procesar_mensaje(mensaje, usuario="cliente"):
         color_usado = datos["color"]
         nombre_archivo = archivo["nombre"]
 
-        datos["paginas"] = mensaje
-        datos["pedido_estado"] = "PENDIENTE"
+        if archivo["tipo"] == "imagen":
+            formato = datos.get("formato_imagen", "CARTA")
+        else:
+            formato = "CARTA"
 
-        # ✅ Insertar en BD con todos los datos completos
         crear_pedido(
             usuario,
             archivo["tipo"],
             nombre_archivo,
             archivo["ruta"],
             color_usado,
-            mensaje
+            mensaje,
+            formato
         )
 
-        # Limpiar datos temporales
+        datos["pedido_estado"] = "PENDIENTE"
         datos["archivo"] = None
         datos["paginas"] = None
         datos["color"] = None
         datos["tipo_archivo"] = None
+        datos["formato_imagen"] = None
         datos["estado"] = "MENU"
 
         return (
@@ -159,29 +223,9 @@ def procesar_mensaje(mensaje, usuario="cliente"):
             f"Archivo: {nombre_archivo}\n"
             f"Paginas: {mensaje}\n"
             f"Color: {color_usado}\n"
+            f"Formato: {formato}\n"
             f"Estado: 🟡 PENDIENTE\n\n"
             + menu_principal()
         )
 
     return None
-
-
-# -----------------------
-# LLAMADO DESDE bot.py cuando llega un archivo
-# -----------------------
-def registrar_archivo(usuario, nombre, ruta, tipo):
-    if usuario not in estado_usuario:
-        return None
-
-    if estado_usuario[usuario]["estado"] == "ESPERANDO_ARCHIVO":
-        estado_usuario[usuario]["archivo"] = {
-            "nombre": nombre,
-            "ruta": ruta,
-            "tipo": tipo
-        }
-        estado_usuario[usuario]["estado"] = "ESPERANDO_PAGINAS"
-        print(f"Archivo guardado: {nombre}")
-        return "Archivo recibido correctamente.\nEscribe las paginas que deseas imprimir.\nEjemplo: 1-5 o 2,4,6 o todo"
-    else:
-        print("Archivo ignorado (no estaba en flujo)")
-        return None

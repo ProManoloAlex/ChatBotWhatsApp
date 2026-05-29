@@ -7,11 +7,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from menu import procesar_mensaje, estado_usuario
 from archivos.convertir import limpiar_archivos_viejos
+from archivos.detectar import es_archivo
 import time
 import os
 
 def iniciar_bot():
-    
+
     DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
     CARPETA_SESION = os.path.join(DIRECTORIO_ACTUAL, "SesionBot")
 
@@ -26,9 +27,8 @@ def iniciar_bot():
         driver.get("https://web.whatsapp.com")
     except Exception as e:
         print(f"No se pudo iniciar el navegador: {e}")
-        return    
-        
-    # Esperar a que cargue WhatsApp
+        return
+
     while True:
         try:
             WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "pane-side")))
@@ -39,27 +39,23 @@ def iniciar_bot():
             return
         except:
             time.sleep(2)
-            
+
     ultimo_msg_id = ""
 
     while True:
         try:
-            # Detectar chats con mensajes no leídos y hacer clic en el primero
             chats_sin_leer = driver.find_elements(
                 By.XPATH, "//div[@id='pane-side']//span[@data-testid='icon-unread-count']/.."
             )
-
             if chats_sin_leer:
                 chats_sin_leer[0].click()
                 time.sleep(1)
 
-            # Obtener todos los mensajes del chat abierto
             mensajes = driver.find_elements(By.CSS_SELECTOR, "div.message-in, div.message-out")
             if mensajes:
                 ultimo = mensajes[-1]
                 texto = ""
 
-                # Intentar obtener texto
                 try:
                     span = ultimo.find_element(By.CSS_SELECTOR, "span[data-testid='selectable-text']")
                     texto = span.text.strip()
@@ -69,24 +65,21 @@ def iniciar_bot():
                 if not texto:
                     texto = ultimo.text.strip()
 
-                # Verificar si es mensaje entrante
                 es_mensaje_entrante = "message-in" in ultimo.get_attribute("class")
 
-                # ✅ Buscar data-id dentro del mensaje
                 try:
                     msg_id = ultimo.find_element(By.CSS_SELECTOR, "[data-id]").get_attribute("data-id")
                 except:
                     msg_id = None
 
-                # ✅ Si no hay data-id usar posicion + texto como ID unico
                 if not msg_id:
                     msg_id = f"{len(mensajes)}_{texto}"
 
-                print(f"[DEBUG] Texto: '{texto}' | msg_id: '{msg_id}' | entrante: {es_mensaje_entrante}")
+                # DEBUG
+                print(f"[DEBUG] es_archivo: {es_archivo(ultimo)}")
 
-                if texto and msg_id != ultimo_msg_id and es_mensaje_entrante:
+                if msg_id != ultimo_msg_id and es_mensaje_entrante:
                     ultimo_msg_id = msg_id
-
                     usuario = "cliente"
 
                     if usuario not in estado_usuario:
@@ -96,15 +89,18 @@ def iniciar_bot():
                             "color": None,
                             "paginas": None,
                             "archivo": None,
-                            "pedido_estado": None
+                            "pedido_estado": None,
+                            "formato_imagen": None
                         }
 
-                    # Procesar mensaje
-                    respuesta = procesar_mensaje(texto)
+                    # ✅ señal en minúsculas para que coincida con el .lower() de menu.py
+                    if es_archivo(ultimo):
+                        respuesta = procesar_mensaje("__archivo__", usuario, elemento=ultimo)
+                    else:
+                        respuesta = procesar_mensaje(texto, usuario)
+
                     if respuesta:
-                        caja = driver.find_element(
-                            By.XPATH, "//footer//div[@role='textbox']"
-                        )
+                        caja = driver.find_element(By.XPATH, "//footer//div[@role='textbox']")
                         caja.send_keys(respuesta)
                         caja.send_keys(Keys.ENTER)
                         time.sleep(1)

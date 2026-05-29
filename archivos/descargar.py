@@ -19,8 +19,14 @@ if not os.path.exists(CARPETA_DESTINO):
 
 def descargar_archivo(mensaje):
     try:
-        print("Buscando boton de descarga...")
+        print("[DEBUG] Buscando boton de descarga...")
         botones = mensaje.find_elements(By.CSS_SELECTOR, "span[data-icon]")
+        print(f"[DEBUG] Botones encontrados: {len(botones)}")
+        
+        for b in botones:
+            icono = b.get_attribute("data-icon")
+            print(f"[DEBUG] Icono: {icono}")
+
         boton_descarga = None
         for b in botones:
             icono = b.get_attribute("data-icon")
@@ -29,12 +35,13 @@ def descargar_archivo(mensaje):
                 break
 
         if not boton_descarga:
-            print("No se encontro boton de descarga")
+            print("[DEBUG] No se encontro boton de descarga")
             return None, None
+
         archivos_antes = set(os.listdir(CARPETA_DESCARGAS))
         boton_descarga.click()
+        print("[DEBUG] Click en descarga...")
 
-        print("Descargando archivo...")
         for _ in range(30):
             time.sleep(1)
             archivos_despues = set(os.listdir(CARPETA_DESCARGAS))
@@ -46,16 +53,15 @@ def descargar_archivo(mensaje):
                 ruta_descarga = os.path.join(CARPETA_DESCARGAS, nombre)
                 ruta_destino = os.path.join(CARPETA_DESTINO, nombre)
                 shutil.move(ruta_descarga, ruta_destino)
-                print("Archivo guardado en:", ruta_destino)
+                print("[DEBUG] Archivo guardado en:", ruta_destino)
                 return nombre, ruta_destino
 
-        print("La descarga no se detecto")
+        print("[DEBUG] La descarga no se detecto")
         return None, None
 
     except Exception as e:
-        print("Error descargando archivo:", e)
+        print("[DEBUG] Error descargando archivo:", e)
         return None, None
-    
     
 def procesar_archivo_detectado(ultimo):
     """
