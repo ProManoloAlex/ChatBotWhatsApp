@@ -1,18 +1,7 @@
-from database import crear_pedido
+from archivos.descargar import descargar_archivo, registrar_pedido
 import os
 
 estado_usuario = {}
-
-# ===============================
-# RUTAS
-# ===============================
-DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-CARPETA_RECIBIDOS = os.path.join(DIRECTORIO_ACTUAL, "archivos_recibidos")
-CARPETA_LISTOS = os.path.join(DIRECTORIO_ACTUAL, "Listos_Para_Imprimir")
-
-for carpeta in [CARPETA_RECIBIDOS, CARPETA_LISTOS]:
-    if not os.path.exists(carpeta):
-        os.makedirs(carpeta)
 
 # ===============================
 # MENUS
@@ -59,10 +48,11 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
             "paginas": None,
             "archivo": None,
             "pedido_estado": None,
-            "formato_imagen": None
+            "formato_imagen": None,
+            "copias": 1,
         }
 
-    datos = estado_usuario[usuario]
+    datos  = estado_usuario[usuario]
     estado = datos["estado"]
 
     print(f"[DEBUG] Mensaje: '{mensaje}' | Estado: '{estado}'")
@@ -76,16 +66,9 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
         return "Para enviar un archivo primero selecciona una opcion del menu."
 
     # -----------------------
-    # SALUDO
+    # SALUDO / INICIO
     # -----------------------
-    if mensaje in saludos:
-        datos["estado"] = "MENU"
-        return menu_principal()
-
-    # -----------------------
-    # INICIO sin saludo
-    # -----------------------
-    if estado == "INICIO":
+    if mensaje in saludos or estado == "INICIO":
         datos["estado"] = "MENU"
         return menu_principal()
 
@@ -144,12 +127,8 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
     # ESPERANDO ARCHIVO
     # -----------------------
     if estado == "ESPERANDO_ARCHIVO":
-
         if mensaje == "__archivo__" and elemento is not None:
-            from archivos.descargar import descargar_archivo
-
             print("[DEBUG] Intentando descargar archivo...")
-            print("[DEBUG] HTML elemento:", elemento.get_attribute("outerHTML")[:400])
 
             nombre, ruta = descargar_archivo(elemento)
             print(f"[DEBUG] Resultado descarga: nombre={nombre} | ruta={ruta}")
@@ -157,8 +136,7 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
             if not nombre or not ruta:
                 return "No se pudo descargar el archivo. Intenta de nuevo."
 
-            extension = nombre.split(".")[-1].lower()
-
+            extension = nombre.rsplit(".", 1)[-1].lower()
             if extension in ["jpg", "jpeg", "png"]:
                 tipo = "imagen"
             elif extension in ["pdf", "doc", "docx"]:
@@ -166,66 +144,78 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
             else:
                 return "Formato no compatible.\nEnvia PDF, Word o imagen JPG/PNG."
 
-            datos["archivo"] = {
-                "nombre": nombre,
-                "ruta": ruta,
-                "tipo": tipo
-            }
+            datos["archivo"] = {"nombre": nombre, "ruta": ruta, "tipo": tipo}
+
+            # Imágenes no necesitan selección de páginas → registrar directo
+            if tipo == "imagen":
+                id_pedido = registrar_pedido(usuario, nombre, ruta, datos)
+                if not id_pedido:
+                    return "Error al registrar el pedido. Intenta de nuevo."
+                datos["pedido_estado"] = "PENDIENTE"
+                datos["estado"] = "MENU"
+                _limpiar_datos(datos)
+                return (
+                    f"Pedido confirmado ✅\n"
+                    f"Archivo: {nombre}\n"
+                    f"Color: {datos.get('color','blanco_negro')}\n"
+                    f"Formato: {datos.get('formato_imagen','CARTA')}\n"
+                    f"Estado: 🟡 PENDIENTE\n\n"
+                    + menu_principal()
+                )
+
+            # Documentos → preguntar páginas
             datos["estado"] = "ESPERANDO_PAGINAS"
             print(f"[DEBUG] Archivo guardado: {nombre} | Ruta: {ruta}")
-
             return (
-                "Archivo recibido correctamente ✅\n"
+                "Archivo recibido ✅\n"
                 "Escribe las paginas que deseas imprimir.\n"
-                "Ejemplo: 1-5 o 2,4,6 o todo"
+                "Ejemplo: 1-5 | 2,4,6 | todo"
             )
 
         else:
-            return "Por favor envia el archivo (PDF o imagen)."
+            return "Por favor envia el archivo (PDF, Word o imagen)."
 
     # -----------------------
     # ESPERANDO PAGINAS
     # -----------------------
     if estado == "ESPERANDO_PAGINAS":
         archivo = datos.get("archivo")
-
         if not archivo:
             return "Error: primero debes enviar un archivo."
 
-        color_usado = datos["color"]
-        nombre_archivo = archivo["nombre"]
+        # Guardar páginas en estado para que registrar_pedido las tome
+        datos["paginas"] = mensaje
 
-        if archivo["tipo"] == "imagen":
-            formato = datos.get("formato_imagen", "CARTA")
-        else:
-            formato = "CARTA"
+        id_pedido = registrar_pedido(usuario, archivo["nombre"], archivo["ruta"], datos)
+        if not id_pedido:
+            return "Error al registrar el pedido. Intenta de nuevo."
 
-        crear_pedido(
-            usuario,
-            archivo["tipo"],
-            nombre_archivo,
-            archivo["ruta"],
-            color_usado,
-            mensaje,
-            formato
-        )
+        color  = datos.get("color", "blanco_negro")
+        formato = datos.get("formato_imagen") or "CARTA"
+        nombre  = archivo["nombre"]
 
         datos["pedido_estado"] = "PENDIENTE"
-        datos["archivo"] = None
-        datos["paginas"] = None
-        datos["color"] = None
-        datos["tipo_archivo"] = None
-        datos["formato_imagen"] = None
+        _limpiar_datos(datos)
         datos["estado"] = "MENU"
 
         return (
             f"Pedido confirmado ✅\n"
-            f"Archivo: {nombre_archivo}\n"
+            f"Archivo: {nombre}\n"
             f"Paginas: {mensaje}\n"
-            f"Color: {color_usado}\n"
+            f"Color: {color}\n"
             f"Formato: {formato}\n"
             f"Estado: 🟡 PENDIENTE\n\n"
             + menu_principal()
         )
 
     return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+def _limpiar_datos(datos):
+    """Resetea los datos del pedido sin tocar el estado ni pedido_estado."""
+    datos["archivo"]       = None
+    datos["paginas"]       = None
+    datos["color"]         = None
+    datos["tipo_archivo"]  = None
+    datos["formato_imagen"]= None
+    datos["copias"]        = 1

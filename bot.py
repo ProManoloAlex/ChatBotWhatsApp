@@ -11,10 +11,43 @@ from archivos.detectar import es_archivo
 import time
 import os
 
-def iniciar_bot():
+def _obtener_id(elemento, indice):
+    """
+    Intenta obtener un ID estable del mensaje.
+    Primero busca data-id (el más confiable).
+    Si no existe usa la posición + timestamp del mensaje.
+    """
+    # 1. data-id directo en el elemento
+    try:
+        mid = elemento.get_attribute("data-id")
+        if mid:
+            return mid
+    except:
+        pass
 
+    # 2. data-id en hijo
+    for selector in ["[data-id]", "[data-key]"]:
+        try:
+            hijo = elemento.find_element(By.CSS_SELECTOR, selector)
+            mid  = hijo.get_attribute("data-id") or hijo.get_attribute("data-key")
+            if mid:
+                return mid
+        except:
+            pass
+
+    # 3. Fallback: posición + hora del mensaje (span de hora)
+    try:
+        hora = elemento.find_element(
+            By.CSS_SELECTOR, "span[data-testid='msg-meta'] span"
+        ).text.strip()
+    except:
+        hora = ""
+    return f"idx{indice}_{hora}"
+
+
+def iniciar_bot():
     DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-    CARPETA_SESION = os.path.join(DIRECTORIO_ACTUAL, "SesionBot")
+    CARPETA_SESION    = os.path.join(DIRECTORIO_ACTUAL, "SesionBot")
 
     if not os.path.exists(CARPETA_SESION):
         os.makedirs(CARPETA_SESION)
@@ -31,7 +64,9 @@ def iniciar_bot():
 
     while True:
         try:
-            WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "pane-side")))
+            WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.ID, "pane-side"))
+            )
             limpiar_archivos_viejos()
             break
         except (InvalidSessionIdException, WebDriverException):
@@ -40,10 +75,12 @@ def iniciar_bot():
         except:
             time.sleep(2)
 
-    ultimo_msg_id = ""
+    ultimo_msg_id  = ""
+    procesando_ahora = False   # bandera para no reprocesar mientras descarga
 
     while True:
         try:
+            # Abrir chat con mensajes sin leer
             chats_sin_leer = driver.find_elements(
                 By.XPATH, "//div[@id='pane-side']//span[@data-testid='icon-unread-count']/.."
             )
@@ -52,58 +89,56 @@ def iniciar_bot():
                 time.sleep(1)
 
             mensajes = driver.find_elements(By.CSS_SELECTOR, "div.message-in, div.message-out")
-            if mensajes:
-                ultimo = mensajes[-1]
-                texto = ""
+            if not mensajes:
+                time.sleep(2)
+                continue
 
+            ultimo    = mensajes[-1]
+            indice    = len(mensajes)
+            msg_id    = _obtener_id(ultimo, indice)
+            es_entrante = "message-in" in (ultimo.get_attribute("class") or "")
+
+            # Saltar si ya fue procesado, es saliente, o estamos en medio de una descarga
+            if msg_id == ultimo_msg_id or not es_entrante or procesando_ahora:
+                time.sleep(2)
+                continue
+
+            # ── Mensaje nuevo entrante ────────────────────────────────
+            ultimo_msg_id    = msg_id
+            procesando_ahora = True   # bloquear el loop mientras procesamos
+            usuario = "cliente"
+
+            if usuario not in estado_usuario:
+                estado_usuario[usuario] = {
+                    "estado": "INICIO",
+                    "tipo_archivo": None,
+                    "color": None,
+                    "paginas": None,
+                    "archivo": None,
+                    "pedido_estado": None,
+                    "formato_imagen": None,
+                    "copias": 1,
+                }
+
+            if es_archivo(ultimo):
+                print(f"[bot] Archivo detectado — estado: {estado_usuario[usuario]['estado']}")
+                respuesta = procesar_mensaje("__archivo__", usuario, elemento=ultimo)
+            else:
                 try:
-                    span = ultimo.find_element(By.CSS_SELECTOR, "span[data-testid='selectable-text']")
+                    span  = ultimo.find_element(By.CSS_SELECTOR, "span[data-testid='selectable-text']")
                     texto = span.text.strip()
                 except:
-                    pass
-
-                if not texto:
                     texto = ultimo.text.strip()
+                print(f"[bot] Texto: '{texto}' — estado: {estado_usuario[usuario]['estado']}")
+                respuesta = procesar_mensaje(texto, usuario)
 
-                es_mensaje_entrante = "message-in" in ultimo.get_attribute("class")
+            if respuesta:
+                caja = driver.find_element(By.XPATH, "//footer//div[@role='textbox']")
+                caja.send_keys(respuesta)
+                caja.send_keys(Keys.ENTER)
+                time.sleep(1)
 
-                try:
-                    msg_id = ultimo.find_element(By.CSS_SELECTOR, "[data-id]").get_attribute("data-id")
-                except:
-                    msg_id = None
-
-                if not msg_id:
-                    msg_id = f"{len(mensajes)}_{texto}"
-
-                # DEBUG
-                print(f"[DEBUG] es_archivo: {es_archivo(ultimo)}")
-
-                if msg_id != ultimo_msg_id and es_mensaje_entrante:
-                    ultimo_msg_id = msg_id
-                    usuario = "cliente"
-
-                    if usuario not in estado_usuario:
-                        estado_usuario[usuario] = {
-                            "estado": "INICIO",
-                            "tipo_archivo": None,
-                            "color": None,
-                            "paginas": None,
-                            "archivo": None,
-                            "pedido_estado": None,
-                            "formato_imagen": None
-                        }
-
-                    # ✅ señal en minúsculas para que coincida con el .lower() de menu.py
-                    if es_archivo(ultimo):
-                        respuesta = procesar_mensaje("__archivo__", usuario, elemento=ultimo)
-                    else:
-                        respuesta = procesar_mensaje(texto, usuario)
-
-                    if respuesta:
-                        caja = driver.find_element(By.XPATH, "//footer//div[@role='textbox']")
-                        caja.send_keys(respuesta)
-                        caja.send_keys(Keys.ENTER)
-                        time.sleep(1)
+            procesando_ahora = False   # liberar el bloqueo
 
             time.sleep(2)
 
@@ -114,5 +149,6 @@ def iniciar_bot():
             print("="*40)
             break
         except Exception as e:
-            print(f"Error inesperado en el bucle: {e}")
+            print(f"[bot] Error inesperado: {e}")
+            procesando_ahora = False   # liberar si hubo error
             time.sleep(5)
