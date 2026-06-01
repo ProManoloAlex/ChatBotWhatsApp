@@ -12,20 +12,12 @@ import time
 import os
 
 def _obtener_id(elemento, indice):
-    """
-    Intenta obtener un ID estable del mensaje.
-    Primero busca data-id (el más confiable).
-    Si no existe usa la posición + timestamp del mensaje.
-    """
-    # 1. data-id directo en el elemento
     try:
         mid = elemento.get_attribute("data-id")
         if mid:
             return mid
     except:
         pass
-
-    # 2. data-id en hijo
     for selector in ["[data-id]", "[data-key]"]:
         try:
             hijo = elemento.find_element(By.CSS_SELECTOR, selector)
@@ -34,8 +26,6 @@ def _obtener_id(elemento, indice):
                 return mid
         except:
             pass
-
-    # 3. Fallback: posición + hora del mensaje (span de hora)
     try:
         hora = elemento.find_element(
             By.CSS_SELECTOR, "span[data-testid='msg-meta'] span"
@@ -44,6 +34,31 @@ def _obtener_id(elemento, indice):
         hora = ""
     return f"idx{indice}_{hora}"
 
+def _enviar_respuesta(driver, respuesta):
+    """Envía un mensaje a la caja de texto. Retorna True si tuvo éxito."""
+    try:
+        caja = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//footer//div[@role='textbox']"))
+        )
+        caja.click()
+        time.sleep(0.3)
+        caja.send_keys(respuesta)
+        caja.send_keys(Keys.ENTER)
+        time.sleep(1)
+        return True
+    except (InvalidSessionIdException, WebDriverException):
+        raise   # dejar que suba — el navegador se cerró
+    except Exception as e:
+        print(f"[bot] Error al enviar respuesta: {e}")
+        return False
+
+def _driver_vivo(driver):
+    """Verifica si el driver sigue activo sin lanzar excepción."""
+    try:
+        _ = driver.current_url
+        return True
+    except:
+        return False
 
 def iniciar_bot():
     DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
@@ -75,12 +90,16 @@ def iniciar_bot():
         except:
             time.sleep(2)
 
-    ultimo_msg_id  = ""
-    procesando_ahora = False   # bandera para no reprocesar mientras descarga
+    ultimo_msg_id    = ""
+    procesando_ahora = False
 
     while True:
         try:
-            # Abrir chat con mensajes sin leer
+            # Si el driver murió de verdad, salir limpiamente
+            if not _driver_vivo(driver):
+                print("\n[bot] Driver no responde — saliendo.")
+                break
+
             chats_sin_leer = driver.find_elements(
                 By.XPATH, "//div[@id='pane-side']//span[@data-testid='icon-unread-count']/.."
             )
@@ -93,19 +112,17 @@ def iniciar_bot():
                 time.sleep(2)
                 continue
 
-            ultimo    = mensajes[-1]
-            indice    = len(mensajes)
-            msg_id    = _obtener_id(ultimo, indice)
+            ultimo      = mensajes[-1]
+            indice      = len(mensajes)
+            msg_id      = _obtener_id(ultimo, indice)
             es_entrante = "message-in" in (ultimo.get_attribute("class") or "")
 
-            # Saltar si ya fue procesado, es saliente, o estamos en medio de una descarga
             if msg_id == ultimo_msg_id or not es_entrante or procesando_ahora:
                 time.sleep(2)
                 continue
 
-            # ── Mensaje nuevo entrante ────────────────────────────────
             ultimo_msg_id    = msg_id
-            procesando_ahora = True   # bloquear el loop mientras procesamos
+            procesando_ahora = True
             usuario = "cliente"
 
             if usuario not in estado_usuario:
@@ -133,16 +150,19 @@ def iniciar_bot():
                 respuesta = procesar_mensaje(texto, usuario)
 
             if respuesta:
-                caja = driver.find_element(By.XPATH, "//footer//div[@role='textbox']")
-                caja.send_keys(respuesta)
-                caja.send_keys(Keys.ENTER)
-                time.sleep(1)
+                _enviar_respuesta(driver, respuesta)
 
-            procesando_ahora = False   # liberar el bloqueo
-
+            procesando_ahora = False
             time.sleep(2)
 
-        except (InvalidSessionIdException, WebDriverException):
+        except (InvalidSessionIdException, WebDriverException) as e:
+            # Verificar si el driver sigue vivo antes de rendirse
+            if _driver_vivo(driver):
+                print(f"[bot] Excepción recuperable: {e} — reintentando...")
+                procesando_ahora = False
+                time.sleep(3)
+                continue
+            # Driver muerto de verdad
             print("\n" + "="*40)
             print("AVISO: El navegador fue cerrado o se perdió la conexión.")
             print("Deteniendo el bot de forma segura...")
@@ -150,5 +170,5 @@ def iniciar_bot():
             break
         except Exception as e:
             print(f"[bot] Error inesperado: {e}")
-            procesando_ahora = False   # liberar si hubo error
+            procesando_ahora = False
             time.sleep(5)
