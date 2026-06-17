@@ -1,26 +1,21 @@
-#import os
-#import win32api
+import os
+import subprocess
 import win32print
 
-#Obtener el nombre de las impresoras que tienes
-printers =[printer[2] for printer in win32print.EnumPrinters(2)]
+# Obtener el nombre de las impresoras configuradas
+printers = [printer[2] for printer in win32print.EnumPrinters(2)]
 for p in printers:
-    print (p)
-"""
+    print(p)
+
 # --- CONFIGURACIÓN DE RUTAS ---
-# Obtenemos la ruta base (donde está tu script)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Rutas exactas según tu estructura de carpetas
-GSPRINT_PATH = os.path.join(BASE_DIR, 'Impresora', 'gsview', 'gsprint.exe')
+# Llamamos directamente al motor de Ghostscript (gswin64.exe)
 GHOSTSCRIPT_EXE = os.path.join(BASE_DIR, 'Impresora', 'bin', 'gswin64.exe')
 GS_LIB_PATH = os.path.join(BASE_DIR, 'Impresora', 'lib')
 
 def imprimir_archivo_pdf(nombre_pdf):
-    # 1. Definir impresora (Cámbiala por la física cuando estés con tu amigo)
-    nombre_impresora = "Microsoft Print to PDF"
-    
-    # 2. Ruta completa al archivo PDF que quieres imprimir
+    nombre_impresora = "EPSON L1250 Series"
     ruta_pdf = os.path.join(BASE_DIR, nombre_pdf)
 
     # --- VALIDACIONES ---
@@ -28,35 +23,40 @@ def imprimir_archivo_pdf(nombre_pdf):
         print(f"❌ Error: El archivo '{nombre_pdf}' no existe en {BASE_DIR}")
         return
 
-    if not os.path.exists(GSPRINT_PATH) or not os.path.exists(GHOSTSCRIPT_EXE):
-        print("❌ Error: Los ejecutables de Ghostscript/GSprint no se encuentran en /Impresora")
+    if not os.path.exists(GHOSTSCRIPT_EXE):
+        print("❌ Error: No se encuentra gswin64.exe en /Impresora/bin")
         return
 
-    # 3. Construcción del comando (Formato robusto para evitar errores de comillas)
-    # Importante: No dejar espacios extra entre los flags y las comillas
-    argumentos = (
-        f'-ghostscript "{GHOSTSCRIPT_EXE}" '
-        f'-I "{GS_LIB_PATH}" '
-        f'-printer "{nombre_impresora}" '
-        f'"{ruta_pdf}"'
-    )
+    # --- COMANDO DIRECTO A GHOSTSCRIPT ---
+    #aaaa funciona
+    comando = [
+        GHOSTSCRIPT_EXE,
+        "-dPrinted",                  # Indica que va a impresión física
+        "-dBATCH",                    # Sale automáticamente al terminar
+        "-dNOPAUSE",                  # No espera confirmación entre páginas
+        "-dNOSAFER",                  # Permite acceder a los recursos del sistema
+        "-dQueryUser=3",              # <--- ¡ESTA LÍNEA ES LA CLAVE! Desactiva el diálogo de Windows
+        f"-I{GS_LIB_PATH}",           # Incluye la librería de fuentes/soporte
+        "-sDEVICE=mswinpr2",          # Driver de impresión de Windows
+        f"-sPrinterName={nombre_impresora}", # Nombre exacto de tu EPSON
+        ruta_pdf                      # Ruta del archivo
+    ]
 
-    print(f"Enviando '{nombre_pdf}' a la cola de impresión...")
+    print(f"Enviando '{nombre_pdf}' directamente a la {nombre_impresora}...")
 
     try:
-        # Ejecutamos el comando
-        # Usamos None en lugar de 'open' para que Windows use el ejecutable directamente
-        win32api.ShellExecute(0, None, GSPRINT_PATH, argumentos, ".", 0)
+        # Ejecutamos de forma limpia ocultando ventanas molestas
+        subprocess.run(comando, check=True, creationflags=0x08000000)
         
         print("-" * 30)
-        print("✅ Impreso correctamente")
+        print("✅ Enviado a la cola de la impresora con éxito")
         print("-" * 30)
         
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Ghostscript devolvió un error: {e}")
     except Exception as e:
-        print(f"❌ Hubo un fallo al intentar imprimir: {e}")
+        print(f"❌ Hubo un fallo inesperado: {e}")
 
 # --- EJECUCIÓN ---
 if __name__ == "__main__":
-    # Asegúrate de que el archivo se llame exactamente así en tu carpeta
-    imprimir_archivo_pdf("Informe.pdf")
-"""
+    imprimir_archivo_pdf("Hola.pdf")
