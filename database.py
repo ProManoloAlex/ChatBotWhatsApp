@@ -47,7 +47,6 @@ def actualizar_estado(id_pedido, estado):
     conn.close()
 
 def actualizar_monto(id_pedido, monto, hojas=None):
-    """Actualiza monto_pago y opcionalmente hojas_totales."""
     conn   = conectar()
     cursor = conn.cursor()
     if hojas is not None:
@@ -70,3 +69,18 @@ def obtener_config(parametro):
     fila = cursor.fetchone()
     conn.close()
     return fila[0] if fila else None
+
+def obtener_ultimo_pedido(whatsapp):
+    """Retorna (id, estado, hojas_totales, monto_pago) del pedido mas reciente del cliente."""
+    conn   = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, estado, hojas_totales, monto_pago
+        FROM pedidos
+        WHERE whatsapp = ?
+        ORDER BY id DESC
+        LIMIT 1
+    """, (whatsapp,))
+    fila = cursor.fetchone()
+    conn.close()
+    return fila
