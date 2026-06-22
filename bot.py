@@ -18,73 +18,77 @@ import os
 # Cada vez que WhatsApp actualice su pagina, lo mas probable es que SOLO
 # se rompan los valores de aqui abajo. Para diagnosticar:
 #   1. Abre el chat en Chrome, clic derecho sobre un mensaje > Inspeccionar
-#   2. Busca el contenedor del mensaje (div con data-testid="msg-container")
-#   3. Compara contra los selectores de abajo y actualiza el que ya no
-#      coincida. No deberias necesitar tocar el resto del archivo.
-#
-# Si tienes dudas, copia el HTML del mensaje inspeccionado y compáralo
-# con la version que se documenta en cada constante.
+#   2. Compara el HTML contra cada constante de abajo y actualiza la que
+#      ya no coincida. No deberias necesitar tocar el resto del archivo.
 
 # Contenedor de cada mensaje individual dentro del chat
-# (confirmado 19/jun/2026: div[data-testid='msg-container'])
+# (confirmado 19/jun/2026)
 SELECTOR_MENSAJE = "div[data-testid='msg-container']"
 
-# Texto visible del mensaje, dentro del contenedor anterior
-# (confirmado 19/jun/2026: span[data-testid='selectable-text'])
+# Texto visible del mensaje
+# (confirmado 19/jun/2026)
 SELECTOR_TEXTO = "span[data-testid='selectable-text']"
 
-# "Colita" del globo que indica si un mensaje es entrante o saliente.
-# Solo aparece en el primer mensaje de una racha del mismo remitente,
-# por eso es solo el PLAN B (ver _es_entrante). Valores posibles:
-# 'tail-in' = entrante, 'tail-out' = saliente
+# Colita del globo — solo aparece en el primer mensaje de una racha.
+# Plan B para detectar entrante/saliente (Plan A es aria-label).
+# (confirmado 19/jun/2026)
 SELECTOR_TAIL_IN  = "span[data-testid='tail-in']"
 SELECTOR_TAIL_OUT = "span[data-testid='tail-out']"
 
-# Plan A para detectar entrante/saliente: aria-label del remitente.
-# Aparece en CADA mensaje (agrupado o no). En español dice "Tú:" para
-# mensajes propios y "Nombre del contacto:" para mensajes ajenos.
-# OJO: si cambias el idioma de WhatsApp esto cambia tambien (ver lista
-# PALABRAS_YO abajo para agregar otros idiomas si hace falta).
+# Plan A para entrante/saliente: aria-label del remitente.
+# En español dice "Tú:" para mensajes propios, "Nombre:" para ajenos.
+# Si cambias el idioma de WhatsApp agrega la palabra en PALABRAS_YO.
+# (confirmado 19/jun/2026)
 SELECTOR_ARIA_REMITENTE = "span[aria-label]"
-PALABRAS_YO = ["tú", "tu", "you"]  # agrega aqui si usas otro idioma
+PALABRAS_YO = ["tú", "tu", "you"]
 
-# Identificador unico de cada mensaje: fecha + hora + remitente.
-# Vive en el atributo data-pre-plain-text del div.copyable-text.
-# Ejemplo real: "[12:51 p.m., 19/6/2026] Manuel Alejandro: "
+# ID unico de cada mensaje: fecha + hora + remitente en data-pre-plain-text
+# Ejemplo: "[12:51 p.m., 19/6/2026] Manuel Alejandro: "
+# (confirmado 19/jun/2026)
 SELECTOR_ID_MENSAJE = "div.copyable-text[data-pre-plain-text]"
 
-# Lista de chats, en la barra lateral izquierda.
-# (confirmado 19/jun/2026: WhatsApp ya NO usa role='listitem' aqui.
-# El ancla estable ahora es data-testid='cell-frame-container', que
-# vive en un div hijo de la fila clickeable real. Por eso navegamos al
-# ancestro 'div[@tabindex]' que es el que realmente recibe el click.)
-SELECTOR_LISTA_CHATS = "//div[@id='pane-side']//div[@data-testid='cell-frame-container']/ancestor::div[@tabindex][1]"
+# Fila clickeable de cada chat en la barra lateral izquierda.
+# (confirmado 19/jun/2026: WhatsApp ya no usa role='listitem' aqui)
+SELECTOR_LISTA_CHATS = (
+    "//div[@id='pane-side']"
+    "//div[@data-testid='cell-frame-container']"
+    "/ancestor::div[@tabindex][1]"
+)
+
+# Badge de mensajes no leidos en la lista de chats
+# (confirmado 19/jun/2026)
+SELECTOR_NO_LEIDOS = (
+    "//div[@id='pane-side']"
+    "//div[@data-testid='cell-frame-container']"
+    "/ancestor::div[@tabindex][1]"
+    "[.//*[@data-testid='icon-unread-count' or @aria-label[contains(.,'no leído') or contains(.,'unread')]]]"
+)
 
 # Caja de texto donde el bot escribe su respuesta
 SELECTOR_CAJA_TEXTO = "//footer//div[@role='textbox']"
 
 # ════════════════════════════════════════════════════════════════════════
-# Cuantas vueltas seguidas del loop sin detectar NINGUN mensaje antes de
-# soltar una alerta fuerte en consola (posible cambio de HTML en WhatsApp)
-LIMITE_ALERTA_SILENCIO = 30   # con sleep de 2s ≈ 1 minuto
+# Vueltas seguidas sin detectar ningun mensaje antes de soltar alerta
+LIMITE_ALERTA_SILENCIO = 30  # con sleep de 2s ≈ 1 minuto
 # ════════════════════════════════════════════════════════════════════════
 
 
 def _obtener_id(elemento, indice):
-    """Identificador unico del mensaje: fecha+hora+remitente si se puede,
-    si no, cae a un indice de respaldo."""
+    # Siempre incluimos el indice de posicion en el ID para que dos
+    # mensajes del mismo remitente dentro del mismo minuto no colisionen.
+    # Sin el indice, "hola" y "1" mandados en el mismo minuto generaban
+    # el mismo data-pre-plain-text y el bot descartaba el segundo.
     try:
         copyable = elemento.find_element(By.CSS_SELECTOR, SELECTOR_ID_MENSAJE)
         pre = copyable.get_attribute("data-pre-plain-text")
         if pre:
-            return pre.strip()
+            return f"{indice}_{pre.strip()}"
     except:
         pass
-    # Plan B viejo, por si acaso
     try:
         mid = elemento.get_attribute("data-id")
         if mid:
-            return mid
+            return f"{indice}_{mid}"
     except:
         pass
     try:
@@ -97,11 +101,8 @@ def _obtener_id(elemento, indice):
 
 
 def _es_entrante(elemento):
-    """Devuelve True si el mensaje es entrante, False si es saliente,
-    None si no se pudo determinar con ningun metodo (esto deberia
-    disparar una alerta arriba en el loop principal)."""
-
-    # Plan A: aria-label con el nombre del remitente o "Tú"
+    """True=entrante, False=saliente, None=no se pudo determinar."""
+    # Plan A: aria-label con nombre del remitente o "Tú"
     try:
         span  = elemento.find_element(By.CSS_SELECTOR, SELECTOR_ARIA_REMITENTE)
         label = (span.get_attribute("aria-label") or "").strip().lower()
@@ -110,8 +111,7 @@ def _es_entrante(elemento):
             return not es_yo
     except:
         pass
-
-    # Plan B: la "colita" del globo (tail-in / tail-out)
+    # Plan B: colita del globo
     try:
         elemento.find_element(By.CSS_SELECTOR, SELECTOR_TAIL_IN)
         return True
@@ -122,8 +122,6 @@ def _es_entrante(elemento):
         return False
     except:
         pass
-
-    # Ningun metodo funciono — probablemente cambio el HTML de WhatsApp
     return None
 
 
@@ -142,8 +140,7 @@ def _enviar_respuesta(driver, respuesta):
         raise
     except Exception as e:
         print(f"[bot] Error al enviar respuesta: {e}")
-        print(f"[bot] Posible causa: cambio el selector de la caja de texto "
-              f"(SELECTOR_CAJA_TEXTO en bot.py). Revisa con Inspeccionar.")
+        print(f"[bot] Posible causa: cambio SELECTOR_CAJA_TEXTO en bot.py")
         return False
 
 
@@ -156,18 +153,11 @@ def _driver_vivo(driver):
 
 
 def _cerrar_popups(driver):
-    """Cierra SOLO popups reales de Chrome (ej. 'Restaurar páginas').
-
-    OJO: antes este buscaba cualquier texto 'Cancel' o 'No' en TODA la
-    pagina, lo cual tambien hacia match con el aviso normal de WhatsApp
-    ('Usa WhatsApp en tu telefono...') y le daba clic sin necesidad,
-    interfiriendo con el chat que ya estaba abierto. Por eso ahora se
-    busca el boton SOLO dentro de un dialogo nativo de Chrome
-    (role='alertdialog' o similar), nunca dentro del DOM de WhatsApp.
-    """
+    """Cierra SOLO popups reales de Chrome — nunca toca el DOM de WhatsApp."""
     try:
-        # Buscamos unicamente dentro de un dialogo de Chrome (no de WhatsApp)
-        dialogos = driver.find_elements(By.XPATH, "//div[@role='alertdialog' or @role='dialog']")
+        dialogos = driver.find_elements(
+            By.XPATH, "//div[@role='alertdialog' or @role='dialog']"
+        )
         for dialogo in dialogos:
             for texto in ["No restaurar", "Cancelar", "Cancel", "No"]:
                 try:
@@ -184,14 +174,27 @@ def _cerrar_popups(driver):
         pass
 
 
-def _abrir_primer_chat(driver):
-    """Abre el chat hasta arriba de la lista (el de actividad mas
-    reciente). Reemplaza la vieja logica de 'buscar no leidos' que
-    dependia de un data-testid que WhatsApp dejo de usar.
+def _abrir_chat_con_no_leidos(driver):
+    """Abre el primer chat que tenga mensajes sin leer.
+    Devuelve True si encontro y abrio uno, False si no habia ninguno.
+    Solo llama a esto cuando no hay un chat activo ya procesando."""
+    try:
+        chats = driver.find_elements(By.XPATH, SELECTOR_NO_LEIDOS)
+        if chats:
+            chats[0].click()
+            time.sleep(1)
+            return True
+        return False
+    except Exception as e:
+        nombre = type(e).__name__
+        if nombre not in ("StaleElementReferenceException",):
+            print(f"[bot] Error al buscar chats no leidos: {nombre}")
+        return False
 
-    Usa element_to_be_clickable (no solo presence_of_element_located)
-    para esperar a que el elemento sea realmente clickeable, evitando
-    fallos cuando el DOM se reacomoda justo despues de cerrar un popup."""
+
+def _abrir_primer_chat(driver):
+    """Abre el primer chat de la lista (el mas reciente).
+    Solo se usa al arrancar el bot por primera vez."""
     try:
         primer_chat = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.XPATH, SELECTOR_LISTA_CHATS))
@@ -199,16 +202,10 @@ def _abrir_primer_chat(driver):
         primer_chat.click()
         return True
     except Exception as e:
-        nombre_error = type(e).__name__
-        # Un clic interceptado momentaneamente (ej. el DOM se movio justo
-        # despues de cerrar un popup) NO es un selector roto - es normal
-        # y se resuelve solo en la siguiente vuelta del loop. Solo avisamos
-        # fuerte si de verdad no se encuentra el elemento en absoluto.
-        if "Intercepted" in nombre_error or "StaleElement" in nombre_error:
-            return False
-        print(f"[bot] No se pudo abrir el primer chat: {nombre_error}")
-        print(f"[bot] Posible causa: cambio el selector de la lista de chats "
-              f"(SELECTOR_LISTA_CHATS en bot.py). Revisa con Inspeccionar.")
+        nombre = type(e).__name__
+        if nombre not in ("TimeoutException", "StaleElementReferenceException"):
+            print(f"[bot] No se pudo abrir primer chat: {nombre}")
+            print(f"[bot] Posible causa: cambio SELECTOR_LISTA_CHATS en bot.py")
         return False
 
 
@@ -252,11 +249,17 @@ def iniciar_bot():
             _cerrar_popups(driver)
             time.sleep(2)
 
+    # Abrir el primer chat al arrancar para tener algo visible
     print("[bot] WhatsApp cargado, iniciando loop...")
-    ultimo_msg_id    = ""
-    procesando_ahora = False
-    contador_vacio   = 0
-    alerta_disparada = False
+    _abrir_primer_chat(driver)
+    time.sleep(1)
+
+    ultimo_msg_id          = ""
+    procesando_ahora       = False
+    contador_vacio         = 0
+    alerta_disparada       = False
+    ultimo_conteo_mensajes = -1
+    ultimo_msg_id_visto    = None
 
     while True:
         try:
@@ -284,13 +287,20 @@ def iniciar_bot():
                             datos["pedido_estado"] = "LISTO"
                             print(f"[bot] Aviso enviado a {usr} — pedido #{id_p}")
 
-            # ── Abrir siempre el primer chat (mas reciente) ────────────────
-            _abrir_primer_chat(driver)
-            time.sleep(1)
+            # ── Cambiar de chat SOLO si hay mensajes no leidos ────────────
+            # Mientras estamos en medio de una conversacion activa NO
+            # cambiamos de chat — eso rompia el flujo del menu porque
+            # el bot perdia el hilo al saltar a otro chat entre mensajes.
+            if not procesando_ahora:
+                _abrir_chat_con_no_leidos(driver)
 
-            # ── Buscar mensajes en el chat abierto ─────────────────────────
+            # ── Leer mensajes del chat actualmente abierto ────────────────
             mensajes = driver.find_elements(By.CSS_SELECTOR, SELECTOR_MENSAJE)
-            print(f"[DEBUG] mensajes detectados: {len(mensajes)}")
+
+            # Solo imprimimos cuando cambia la cantidad — evita spam
+            if len(mensajes) != ultimo_conteo_mensajes:
+                print(f"[DEBUG] mensajes detectados: {len(mensajes)}")
+                ultimo_conteo_mensajes = len(mensajes)
 
             if not mensajes:
                 contador_vacio += 1
@@ -298,12 +308,9 @@ def iniciar_bot():
                     alerta_disparada = True
                     print("=" * 60)
                     print("[bot] ALERTA: llevo muchas vueltas sin detectar NINGUN")
-                    print("[bot] mensaje, ni siquiera viejos. Es muy probable que")
-                    print("[bot] WhatsApp Web haya cambiado su estructura HTML.")
-                    print("[bot] Revisa la 'ZONA DE SELECTORES' al inicio de bot.py")
-                    print("[bot] y compara SELECTOR_MENSAJE / SELECTOR_LISTA_CHATS")
-                    print("[bot] contra el HTML actual (clic derecho > Inspeccionar")
-                    print("[bot] sobre un mensaje real en el chat).")
+                    print("[bot] mensaje. Posible cambio de HTML en WhatsApp Web.")
+                    print("[bot] Revisa SELECTOR_MENSAJE y SELECTOR_LISTA_CHATS")
+                    print("[bot] en la ZONA DE SELECTORES al inicio de bot.py")
                     print("=" * 60)
                 time.sleep(2)
                 continue
@@ -319,20 +326,22 @@ def iniciar_bot():
             if es_entrante is None:
                 print("=" * 60)
                 print("[bot] ALERTA: no se pudo determinar si el ultimo mensaje")
-                print("[bot] es entrante o saliente (fallaron los 2 metodos).")
-                print("[bot] Revisa SELECTOR_ARIA_REMITENTE / SELECTOR_TAIL_IN /")
-                print("[bot] SELECTOR_TAIL_OUT en la 'ZONA DE SELECTORES' de bot.py")
+                print("[bot] es entrante o saliente. Revisa SELECTOR_ARIA_REMITENTE")
+                print("[bot] / SELECTOR_TAIL_IN / SELECTOR_TAIL_OUT en bot.py")
                 print("=" * 60)
                 time.sleep(2)
                 continue
 
-            print(f"[DEBUG] msg_id={msg_id} | ultimo_id={ultimo_msg_id} | entrante={es_entrante}")
+            # Solo imprimimos cuando el msg_id cambia — evita spam
+            if msg_id != ultimo_msg_id_visto:
+                print(f"[DEBUG] msg_id={msg_id} | ultimo_id={ultimo_msg_id} | entrante={es_entrante}")
+                ultimo_msg_id_visto = msg_id
 
             if msg_id == ultimo_msg_id or not es_entrante or procesando_ahora:
                 time.sleep(2)
                 continue
 
-            # ── Mensaje nuevo entrante ────────────────────────────────────
+            # ── Mensaje nuevo entrante — procesar ─────────────────────────
             ultimo_msg_id    = msg_id
             procesando_ahora = True
             usuario = "cliente"
@@ -364,7 +373,7 @@ def iniciar_bot():
                 respuesta = procesar_mensaje(texto, usuario)
 
             if respuesta:
-                print(f"[bot] >>> Respuesta a enviar: {repr(respuesta)}")
+                print(f"[bot] >>> Enviando respuesta...")
                 _enviar_respuesta(driver, respuesta)
             else:
                 print(f"[bot] >>> procesar_mensaje no devolvio nada (None)")
