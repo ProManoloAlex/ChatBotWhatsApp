@@ -1,46 +1,57 @@
 from selenium.webdriver.common.by import By
 
+# ════════════════════════════════════════════════════════════════════════
+# ZONA DE SELECTORES — SI WHATSAPP WEB CAMBIA SU HTML, EMPIEZA AQUI
+# ════════════════════════════════════════════════════════════════════════
+# (confirmado 22/jun/2026 inspeccionando mensaje con archivo .docx)
+
+# Contenedor clickeable del documento (PDF, DOCX, DOC)
+# Tiene el titulo con el nombre del archivo y el boton de descarga adentro
+SEL_DOCUMENT_THUMB = "[data-testid='document-thumb']"
+
+# Etiqueta con el tipo de archivo (muestra "PDF", "DOCX", "DOC", etc.)
+SEL_TIPO_ARCHIVO = "[data-testid='type']"
+
+# Boton de descarga — WhatsApp usa data-icon="audio-download" para documentos
+# y data-testid="audio-download" como ancla estable
+SEL_BOTON_DESCARGA = "[data-testid='audio-download']"
+
+# Imagen adjunta real (foto enviada como mensaje, no miniatura de perfil)
+SEL_IMAGEN_ADJUNTA = "[data-testid='media-url-provider'], [data-testid='image-thumb']"
+
+# Video adjunto
+SEL_VIDEO_ADJUNTO = "[data-testid='video-thumb']"
+# ════════════════════════════════════════════════════════════════════════
+
+
 def es_archivo(mensaje):
     """
     Detecta si un mensaje de WhatsApp contiene un archivo adjunto.
-    Evita falsos positivos con imágenes de perfil o miniaturas del DOM.
+    Retorna True si encuentra documento, imagen o video.
     """
     try:
-        # ── DOCUMENTOS: PDF, DOCX, DOC ────────────────────────────────
-        for texto in ["PDF", "DOCX", "DOC"]:
-            if mensaje.find_elements(By.XPATH, f".//*[contains(text(), '{texto}')]"):
+        # ── DOCUMENTOS (PDF, DOCX, DOC) ───────────────────────────────
+        # Plan A: data-testid='document-thumb' — ancla mas estable
+        if mensaje.find_elements(By.CSS_SELECTOR, SEL_DOCUMENT_THUMB):
+            return True
+
+        # Plan B: data-testid='type' con texto PDF/DOCX/DOC
+        tipos = mensaje.find_elements(By.CSS_SELECTOR, SEL_TIPO_ARCHIVO)
+        for t in tipos:
+            texto = (t.text or "").strip().upper()
+            if texto in ("PDF", "DOCX", "DOC"):
                 return True
 
-        # ── TAMAÑO DE ARCHIVO (kB / MB) ────────────────────────────────
-        # Buscamos específicamente dentro de burbujas de documento,
-        # no en cualquier parte del DOM
-        contenedor_doc = mensaje.find_elements(
-            By.XPATH,
-            ".//*[contains(@class,'document') or contains(@class,'media-caption') "
-            "or contains(@class,'audio') or contains(@data-testid,'document')]"
-        )
-        if contenedor_doc:
-            for c in contenedor_doc:
-                t = c.text
-                if "kB" in t or "MB" in t or "páginas" in t:
-                    return True
+        # Plan C: boton de descarga presente
+        if mensaje.find_elements(By.CSS_SELECTOR, SEL_BOTON_DESCARGA):
+            return True
 
-        # ── IMÁGENES REALES (burbuja de imagen de WhatsApp) ───────────
-        # WhatsApp usa data-testid="media-url-provider" para imágenes adjuntas
-        if mensaje.find_elements(By.XPATH,
-                ".//*[@data-testid='media-url-provider' or "
-                "@data-testid='image-thumb']"):
+        # ── IMAGENES REALES ───────────────────────────────────────────
+        if mensaje.find_elements(By.CSS_SELECTOR, SEL_IMAGEN_ADJUNTA):
             return True
 
         # ── VIDEOS ────────────────────────────────────────────────────
-        if mensaje.find_elements(By.XPATH,
-                ".//*[@data-testid='video-thumb' or "
-                "@data-testid='media-container']//video"):
-            return True
-
-        # ── BOTÓN DE DESCARGA ─────────────────────────────────────────
-        if mensaje.find_elements(By.XPATH,
-                ".//span[contains(@data-icon,'download')]"):
+        if mensaje.find_elements(By.CSS_SELECTOR, SEL_VIDEO_ADJUNTO):
             return True
 
         return False

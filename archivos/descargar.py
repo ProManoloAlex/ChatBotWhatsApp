@@ -5,6 +5,27 @@ from selenium.webdriver.common.by import By
 
 from database import crear_pedido, obtener_config, actualizar_monto
 
+# ════════════════════════════════════════════════════════════════════════
+# ZONA DE SELECTORES — SI WHATSAPP WEB CAMBIA SU HTML, EMPIEZA AQUI
+# ════════════════════════════════════════════════════════════════════════
+# (confirmado 22/jun/2026 inspeccionando mensaje con archivo .docx)
+
+# Boton de descarga — data-testid es mas estable que data-icon
+SEL_BOTON_DESCARGA    = "[data-testid='audio-download']"
+
+# Fallback: buscar por data-icon si el testid cambia
+SEL_BOTON_DESCARGA_ICON = "span[data-icon='audio-download']"
+
+# Contenedor del documento — clic aqui si no hay boton de descarga visible
+SEL_DOCUMENT_THUMB    = "[data-testid='document-thumb']"
+
+# Nombre del archivo — span con dir="auto" dentro del thumb del documento
+SEL_NOMBRE_ARCHIVO    = "[data-testid='document-thumb'] span[dir='auto']"
+
+# Tipo de archivo (muestra "PDF", "DOCX", etc.)
+SEL_TIPO_ARCHIVO      = "[data-testid='type']"
+# ════════════════════════════════════════════════════════════════════════
+
 # ── RUTAS ────────────────────────────────────────────────────────────────────
 DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RAIZ_PROYECTO     = os.path.dirname(DIRECTORIO_ACTUAL)
@@ -17,7 +38,7 @@ if not os.path.exists(CARPETA_DESTINO):
 EXTENSIONES_IMAGEN    = {"jpg", "jpeg", "png"}
 EXTENSIONES_DOCUMENTO = {"pdf", "doc", "docx"}
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 def _esperar_descarga(archivos_antes: set, timeout: int = 30):
     for _ in range(timeout):
         time.sleep(1)
@@ -27,57 +48,55 @@ def _esperar_descarga(archivos_antes: set, timeout: int = 30):
                 return nombre
     return None
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 def descargar_archivo(mensaje):
     try:
-        # ── DEBUG: mostrar todos los íconos disponibles ───────────────
-        botones = mensaje.find_elements(By.CSS_SELECTOR, "span[data-icon]")
-        print(f"[DEBUG] Total spans con data-icon: {len(botones)}")
-        for b in botones:
-            icono = b.get_attribute("data-icon") or ""
-            print(f"[DEBUG] Icono encontrado: '{icono}'")
+        # ── Plan A: boton de descarga por data-testid ─────────────────
+        boton = None
+        elementos = mensaje.find_elements(By.CSS_SELECTOR, SEL_BOTON_DESCARGA)
+        if elementos:
+            boton = elementos[0]
+            print("[descargar] Boton descarga encontrado por data-testid")
 
-        # ── Buscar botón de descarga ──────────────────────────────────
-        # WhatsApp usa "audio-download" para documentos
-        boton_descarga = None
-        for b in botones:
-            icono = b.get_attribute("data-icon") or ""
-            if "download" in icono:
-                boton_descarga = b
-                break
+        # ── Plan B: boton por data-icon ───────────────────────────────
+        if not boton:
+            elementos = mensaje.find_elements(By.CSS_SELECTOR, SEL_BOTON_DESCARGA_ICON)
+            if elementos:
+                boton = elementos[0]
+                print("[descargar] Boton descarga encontrado por data-icon")
 
-        # Si no hay botón de descarga, intentar clic en el thumb del documento
-        if not boton_descarga:
-            print("[descargar] No se encontró span con download, buscando document-thumb...")
-            thumbs = mensaje.find_elements(By.CSS_SELECTOR, "[data-testid='document-thumb']")
-            print(f"[DEBUG] document-thumb encontrados: {len(thumbs)}")
+        # ── Plan C: clic directo en el thumb del documento ────────────
+        if not boton:
+            thumbs = mensaje.find_elements(By.CSS_SELECTOR, SEL_DOCUMENT_THUMB)
             if thumbs:
-                boton_descarga = thumbs[0]
+                boton = thumbs[0]
+                print("[descargar] Usando document-thumb como boton de descarga")
 
-        if not boton_descarga:
-            print("[descargar] No se encontró botón de descarga.")
+        if not boton:
+            print("[descargar] No se encontro ningun boton de descarga.")
+            print("[descargar] Revisa SEL_BOTON_DESCARGA en descargar.py")
             return None, None
 
         archivos_antes = set(os.listdir(CARPETA_DESCARGAS))
-        boton_descarga.click()
+        boton.click()
         print("[descargar] Click realizado, esperando archivo...")
 
         nombre = _esperar_descarga(archivos_antes)
         if not nombre:
-            print("[descargar] Tiempo de espera agotado.")
+            print("[descargar] Tiempo de espera agotado — el archivo no llego a Downloads.")
             return None, None
 
         ruta_origen  = os.path.join(CARPETA_DESCARGAS, nombre)
         ruta_destino = os.path.join(CARPETA_DESTINO, nombre)
         shutil.move(ruta_origen, ruta_destino)
-        print(f"[descargar] Archivo guardado en: {ruta_destino}")
+        print(f"[descargar] Archivo guardado: {ruta_destino}")
         return nombre, ruta_destino
 
     except Exception as e:
         print(f"[descargar] Error: {e}")
         return None, None
 
-# ─────────────────────────────────────────────────────────────────────────────
+
 def registrar_pedido(whatsapp, nombre, ruta, estado_usuario: dict):
     extension = nombre.rsplit(".", 1)[-1].lower()
 
@@ -86,7 +105,7 @@ def registrar_pedido(whatsapp, nombre, ruta, estado_usuario: dict):
     elif extension in EXTENSIONES_DOCUMENTO:
         tipo = "documento"
     else:
-        print(f"[registrar_pedido] Extensión no soportada: {extension}")
+        print(f"[registrar_pedido] Extension no soportada: {extension}")
         return None
 
     color   = estado_usuario.get("color", "blanco_negro")
@@ -122,5 +141,5 @@ def registrar_pedido(whatsapp, nombre, ruta, estado_usuario: dict):
         monto_pago            = monto_pago,
     )
 
-    print(f"[registrar_pedido] Pedido #{id_pedido} — {tipo} | {color} | {formato} | monto inicial: ${monto_pago}")
+    print(f"[registrar_pedido] Pedido #{id_pedido} — {tipo} | {color} | {formato} | monto: ${monto_pago}")
     return id_pedido
