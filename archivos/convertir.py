@@ -6,11 +6,10 @@ from docx2pdf import convert
 
 from database import obtener_pedidos_pendientes, actualizar_estado, actualizar_monto, obtener_config
 
-# ── RUTAS ────────────────────────────────────────────────────────────────────
-# convertir.py está en Ciber/archivos/, subimos un nivel para llegar a Ciber/
-DIRECTORIO_ACTUAL   = os.path.dirname(os.path.abspath(__file__))
-RAIZ_PROYECTO       = os.path.dirname(DIRECTORIO_ACTUAL)          # Ciber/
-CARPETA_SALIDA      = os.path.join(RAIZ_PROYECTO, "Listos_Para_Imprimir")
+# ── RUTAS ─────────────────────────────────────────────────────────────────────
+DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+RAIZ_PROYECTO     = os.path.dirname(DIRECTORIO_ACTUAL)
+CARPETA_SALIDA    = os.path.join(RAIZ_PROYECTO, "Listos_Para_Imprimir")
 
 if not os.path.exists(CARPETA_SALIDA):
     os.makedirs(CARPETA_SALIDA)
@@ -50,7 +49,7 @@ def procesar_imagen(ruta, formato, id_p, copias=1, color="blanco_negro"):
         ruta_final = os.path.join(CARPETA_SALIDA, f"pedido_{id_p}.jpg")
         hoja.save(ruta_final, quality=95)
         print(f"[convertir] Imagen lista: {ruta_final}")
-        return True, 1   # siempre 1 hoja por imagen
+        return True, 1
 
     except Exception as e:
         print(f"[convertir] Error procesando imagen: {e}")
@@ -78,10 +77,10 @@ def procesar_pdf(ruta, seleccion, id_p):
             if 0 <= i < doc.page_count:
                 nuevo_doc.insert_pdf(doc, from_page=i, to_page=i)
 
-        hojas = len(nuevo_doc)
+        hojas      = len(nuevo_doc)
         ruta_final = os.path.join(CARPETA_SALIDA, f"pedido_{id_p}.pdf")
         nuevo_doc.save(ruta_final)
-        print(f"[convertir] PDF listo ({hojas} págs.): {ruta_final}")
+        print(f"[convertir] PDF listo ({hojas} pags.): {ruta_final}")
         return True, hojas
 
     except Exception as e:
@@ -94,12 +93,11 @@ def procesar_word(ruta, id_p):
         ruta_final = os.path.join(CARPETA_SALIDA, f"pedido_{id_p}.pdf")
         convert(ruta, ruta_final)
 
-        # Contar hojas del PDF generado
         doc   = fitz.open(ruta_final)
         hojas = doc.page_count
         doc.close()
 
-        print(f"[convertir] Word convertido ({hojas} págs.): {ruta_final}")
+        print(f"[convertir] Word convertido ({hojas} pags.): {ruta_final}")
         return True, hojas
 
     except Exception as e:
@@ -118,31 +116,31 @@ def monitor_conversion():
                 id_p, ruta, formato, paginas, tipo, color, copias, hojas_bd, img_x_hoja = pedido
                 print(f"[monitor] Procesando pedido #{id_p} — {tipo}")
 
-                extension = ruta.lower().rsplit(".", 1)[-1]
+                extension  = ruta.lower().rsplit(".", 1)[-1]
                 procesado  = False
                 hojas_real = 0
 
                 if extension in ("jpg", "jpeg", "png"):
                     procesado, hojas_real = procesar_imagen(ruta, formato, id_p, copias, color)
-
                 elif extension == "pdf":
                     procesado, hojas_real = procesar_pdf(ruta, paginas, id_p)
-
                 elif extension in ("doc", "docx"):
                     procesado, hojas_real = procesar_word(ruta, id_p)
 
                 if procesado and hojas_real > 0:
-                    # Calcular monto real ahora que conocemos las hojas
                     precio = float(
                         obtener_config("precio_color") if color == "color"
                         else obtener_config("precio_bn") or 1
                     )
                     monto = hojas_real * copias * precio
-                    actualizar_monto(id_p, monto, hojas=hojas_real)  # ← guarda monto y hojas reales
-                    actualizar_estado(id_p, "PROCESANDO")
-                    print(f"[monitor] Pedido #{id_p} → {hojas_real} hojas × {copias} copias × ${precio} = ${monto}")
+                    actualizar_monto(id_p, monto, hojas=hojas_real)
+                    # ── Flujo: PENDIENTE → PROCESANDO → LISTO_PARA_IMPRIMIR
+                    actualizar_estado(id_p, "LISTO_PARA_IMPRIMIR")
+                    print(f"[monitor] Pedido #{id_p} → LISTO_PARA_IMPRIMIR "
+                          f"({hojas_real} hojas × {copias} copias × ${precio} = ${monto})")
                 elif not procesado:
                     actualizar_estado(id_p, "ERROR")
+                    print(f"[monitor] Pedido #{id_p} → ERROR al convertir")
 
         except Exception as e:
             print(f"[monitor] Error general: {e}")
