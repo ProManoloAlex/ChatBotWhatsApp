@@ -2,31 +2,14 @@ import os
 import time
 import shutil
 from selenium.webdriver.common.by import By
-
 from database import crear_pedido, obtener_config, actualizar_monto
+from selectores import (
+    ARCHIVO_BOTON_DESCARGA,
+    ARCHIVO_BOTON_DESCARGA_ICON,
+    ARCHIVO_DOCUMENT_THUMB,
+)
 
-# ════════════════════════════════════════════════════════════════════════
-# ZONA DE SELECTORES — SI WHATSAPP WEB CAMBIA SU HTML, EMPIEZA AQUI
-# ════════════════════════════════════════════════════════════════════════
-# (confirmado 22/jun/2026 inspeccionando mensaje con archivo .docx)
-
-# Boton de descarga — data-testid es mas estable que data-icon
-SEL_BOTON_DESCARGA    = "[data-testid='audio-download']"
-
-# Fallback: buscar por data-icon si el testid cambia
-SEL_BOTON_DESCARGA_ICON = "span[data-icon='audio-download']"
-
-# Contenedor del documento — clic aqui si no hay boton de descarga visible
-SEL_DOCUMENT_THUMB    = "[data-testid='document-thumb']"
-
-# Nombre del archivo — span con dir="auto" dentro del thumb del documento
-SEL_NOMBRE_ARCHIVO    = "[data-testid='document-thumb'] span[dir='auto']"
-
-# Tipo de archivo (muestra "PDF", "DOCX", etc.)
-SEL_TIPO_ARCHIVO      = "[data-testid='type']"
-# ════════════════════════════════════════════════════════════════════════
-
-# ── RUTAS ────────────────────────────────────────────────────────────────────
+# ── RUTAS ─────────────────────────────────────────────────────────────────────
 DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RAIZ_PROYECTO     = os.path.dirname(DIRECTORIO_ACTUAL)
 CARPETA_DESCARGAS = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -51,30 +34,31 @@ def _esperar_descarga(archivos_antes: set, timeout: int = 30):
 
 def descargar_archivo(mensaje):
     try:
-        # ── Plan A: boton de descarga por data-testid ─────────────────
         boton = None
-        elementos = mensaje.find_elements(By.CSS_SELECTOR, SEL_BOTON_DESCARGA)
+
+        # Plan A: boton por data-testid
+        elementos = mensaje.find_elements(By.CSS_SELECTOR, ARCHIVO_BOTON_DESCARGA)
         if elementos:
             boton = elementos[0]
-            print("[descargar] Boton descarga encontrado por data-testid")
+            print("[descargar] Boton encontrado por data-testid")
 
-        # ── Plan B: boton por data-icon ───────────────────────────────
+        # Plan B: boton por data-icon
         if not boton:
-            elementos = mensaje.find_elements(By.CSS_SELECTOR, SEL_BOTON_DESCARGA_ICON)
+            elementos = mensaje.find_elements(By.CSS_SELECTOR, ARCHIVO_BOTON_DESCARGA_ICON)
             if elementos:
                 boton = elementos[0]
-                print("[descargar] Boton descarga encontrado por data-icon")
+                print("[descargar] Boton encontrado por data-icon")
 
-        # ── Plan C: clic directo en el thumb del documento ────────────
+        # Plan C: clic directo en el thumb
         if not boton:
-            thumbs = mensaje.find_elements(By.CSS_SELECTOR, SEL_DOCUMENT_THUMB)
+            thumbs = mensaje.find_elements(By.CSS_SELECTOR, ARCHIVO_DOCUMENT_THUMB)
             if thumbs:
                 boton = thumbs[0]
-                print("[descargar] Usando document-thumb como boton de descarga")
+                print("[descargar] Usando document-thumb como boton")
 
         if not boton:
-            print("[descargar] No se encontro ningun boton de descarga.")
-            print("[descargar] Revisa SEL_BOTON_DESCARGA en descargar.py")
+            print("[descargar] No se encontro boton de descarga.")
+            print("[descargar] Revisa ARCHIVO_BOTON_DESCARGA en selectores.py")
             return None, None
 
         archivos_antes = set(os.listdir(CARPETA_DESCARGAS))
@@ -83,13 +67,13 @@ def descargar_archivo(mensaje):
 
         nombre = _esperar_descarga(archivos_antes)
         if not nombre:
-            print("[descargar] Tiempo de espera agotado — el archivo no llego a Downloads.")
+            print("[descargar] Tiempo de espera agotado.")
             return None, None
 
         ruta_origen  = os.path.join(CARPETA_DESCARGAS, nombre)
         ruta_destino = os.path.join(CARPETA_DESTINO, nombre)
         shutil.move(ruta_origen, ruta_destino)
-        print(f"[descargar] Archivo guardado: {ruta_destino}")
+        print(f"[descargar] Guardado: {ruta_destino}")
         return nombre, ruta_destino
 
     except Exception as e:
