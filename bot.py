@@ -8,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from menu import procesar_mensaje, estado_usuario
 from archivos.convertir import limpiar_archivos_viejos
 from archivos.detectar import es_archivo
-from database import obtener_ultimo_pedido
+from database import obtener_ultimo_pedido, obtener_pedido_por_id
 from selectores import (
     MSG_CONTENEDOR, MSG_TEXTO, MSG_ID,
     MSG_ARIA_REMITENTE, PALABRAS_YO,
@@ -214,12 +214,23 @@ def iniciar_bot():
             _cerrar_popups(driver)
 
             # ── Revisar si hay pedido listo para avisar ───────────────
+            # Solo avisamos si el pedido que el cliente esta esperando
+            # (el guardado en datos["id_pedido_activo"]) cambio a IMPRESO.
+            # Esto evita que un pedido viejo o de otra sesion dispare
+            # el aviso antes de tiempo.
             for usr, datos in list(estado_usuario.items()):
                 if datos.get("estado") == "ESPERANDO_AVISO":
-                    pedido = obtener_ultimo_pedido(usr)
+                    id_esperado = datos.get("id_pedido_activo")
+                    if not id_esperado:
+                        # Fallback: buscar el ultimo pedido del usuario
+                        pedido = obtener_ultimo_pedido(usr)
+                    else:
+                        pedido = obtener_pedido_por_id(id_esperado)
                     if pedido:
                         id_p, estado_p, hojas, monto = pedido
                         if estado_p == "IMPRESO":
+                            hojas = hojas or 0
+                            monto = monto or 0.0
                             aviso = (
                                 f"Tus impresiones estan listas!\n"
                                 f"Pedido #{id_p} — {hojas} hojas — ${monto:.0f} pesos.\n"
@@ -229,6 +240,7 @@ def iniciar_bot():
                             _enviar_respuesta(driver, aviso)
                             datos["estado"] = "INICIO"
                             datos["pedido_estado"] = "LISTO"
+                            datos["id_pedido_activo"] = None
                             print(f"[bot] Aviso enviado a {usr} — pedido #{id_p}")
 
             # ── Cambiar chat SOLO si hay no leidos y no estamos procesando

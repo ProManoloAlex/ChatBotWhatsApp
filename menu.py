@@ -1,6 +1,6 @@
 from archivos.descargar import descargar_archivo, registrar_pedido
 from archivos.convertir import procesar_pdf, procesar_word, CARPETA_SALIDA
-from database import obtener_config, actualizar_estado
+from database import obtener_config, actualizar_estado, actualizar_monto
 import os
 
 estado_usuario = {}
@@ -71,7 +71,6 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
 
     # -----------------------
     # SALUDO / INICIO
-    # Tambien reactiva el menu si el usuario ya estaba esperando aviso
     # -----------------------
     if mensaje in saludos or estado in ("INICIO", "ESPERANDO_AVISO"):
         datos["estado"] = "MENU"
@@ -198,7 +197,9 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
         copias    = int(datos.get("copias", 1))
         precio    = float(obtener_config("precio_color") if color == "color" else obtener_config("precio_bn") or 1)
 
-        # Convertir con id temporal 0 → genera pedido_0.pdf en Listos_Para_Imprimir
+        # Convertimos con id temporal 0 para mostrar el conteo real de hojas
+        # al cliente antes de que confirme. El archivo queda en pedido_0.pdf
+        # y se renombra al id real cuando el cliente confirma.
         if extension == "pdf":
             procesado, hojas = procesar_pdf(ruta, mensaje, 0)
         elif extension in ("doc", "docx"):
@@ -241,20 +242,35 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
             if not id_pedido:
                 return "Error al registrar el pedido. Intenta de nuevo."
 
-            # Renombrar pedido_0.pdf → pedido_{id_real}.pdf
             extension  = archivo["ruta"].rsplit(".", 1)[-1].lower()
             ext_salida = "jpg" if extension in ("jpg", "jpeg", "png") else "pdf"
-            ruta_temp  = os.path.join(CARPETA_SALIDA, f"pedido_0.{ext_salida}")
-            ruta_final = os.path.join(CARPETA_SALIDA, f"pedido_{id_pedido}.{ext_salida}")
+            es_imagen  = extension in ("jpg", "jpeg", "png")
 
-            if os.path.exists(ruta_temp):
-                os.rename(ruta_temp, ruta_final)
-                print(f"[menu] Renombrado: pedido_0.{ext_salida} -> pedido_{id_pedido}.{ext_salida}")
-                actualizar_estado(id_pedido, "PROCESANDO")
+            if es_imagen:
+                # IMAGENES: el monitor las convierte — quedan en PENDIENTE
+                # para que convertir.py las procese y las pase a LISTO_PARA_IMPRIMIR
+                print(f"[menu] Imagen registrada como pedido #{id_pedido} — en espera del monitor")
+
             else:
-                print(f"[menu] Advertencia: no se encontro {ruta_temp}")
+                # DOCUMENTOS: ya fueron convertidos en ESPERANDO_PAGINAS
+                # Solo hay que renombrar pedido_0.pdf → pedido_{id}.pdf
+                # y marcar directamente como LISTO_PARA_IMPRIMIR
+                ruta_temp  = os.path.join(CARPETA_SALIDA, f"pedido_0.{ext_salida}")
+                ruta_final = os.path.join(CARPETA_SALIDA, f"pedido_{id_pedido}.{ext_salida}")
 
-            datos["pedido_estado"] = "PENDIENTE"
+                if os.path.exists(ruta_temp):
+                    os.rename(ruta_temp, ruta_final)
+                    print(f"[menu] Renombrado: pedido_0.{ext_salida} -> pedido_{id_pedido}.{ext_salida}")
+                    # Guardar hojas y monto reales calculados en ESPERANDO_PAGINAS
+                    actualizar_monto(id_pedido, datos["monto_real"], hojas=datos["hojas_reales"])
+                    actualizar_estado(id_pedido, "LISTO_PARA_IMPRIMIR")
+                    print(f"[menu] Pedido #{id_pedido} → LISTO_PARA_IMPRIMIR "
+                          f"({datos['hojas_reales']} hojas, ${datos['monto_real']:.0f})")
+                else:
+                    print(f"[menu] Advertencia: no se encontro {ruta_temp}")
+
+            datos["pedido_estado"]    = "PENDIENTE"
+            datos["id_pedido_activo"] = id_pedido  # para que bot.py sepa exactamente cual pedido vigilar
             _limpiar_datos(datos)
             datos["estado"] = "ESPERANDO_AVISO"
 
@@ -264,7 +280,6 @@ def procesar_mensaje(mensaje, usuario="cliente", elemento=None):
             )
 
         elif mensaje in ["no", "n", "cancelar"]:
-            # Limpiar archivo temporal si existe
             extension  = archivo["ruta"].rsplit(".", 1)[-1].lower()
             ext_salida = "jpg" if extension in ("jpg", "jpeg", "png") else "pdf"
             ruta_temp  = os.path.join(CARPETA_SALIDA, f"pedido_0.{ext_salida}")

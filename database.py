@@ -2,7 +2,7 @@ import sqlite3
 import os
 
 DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(DIRECTORIO_ACTUAL, "automatizacion.db")
+DB_NAME           = os.path.join(DIRECTORIO_ACTUAL, "automatizacion.db")
 
 def conectar():
     return sqlite3.connect(DB_NAME)
@@ -27,6 +27,12 @@ def crear_pedido(whatsapp, tipo_archivo, nombre_archivo, ruta_local,
     return id_pedido
 
 def obtener_pedidos_pendientes():
+    """Retorna pedidos en PENDIENTE para que el monitor los convierta.
+    El flujo completo es:
+      PENDIENTE → (monitor convierte) → LISTO_PARA_IMPRIMIR
+               → (operador imprime)  → IMPRESO
+               → (bot avisa)         → cliente notificado
+    """
     conn   = conectar()
     cursor = conn.cursor()
     cursor.execute("""
@@ -81,6 +87,19 @@ def obtener_ultimo_pedido(whatsapp):
         ORDER BY id DESC
         LIMIT 1
     """, (whatsapp,))
+    fila = cursor.fetchone()
+    conn.close()
+    return fila
+
+def obtener_pedido_por_id(id_pedido):
+    """Retorna (id, estado, hojas_totales, monto_pago) de un pedido especifico."""
+    conn   = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, estado, hojas_totales, monto_pago
+        FROM pedidos
+        WHERE id = ?
+    """, (id_pedido,))
     fila = cursor.fetchone()
     conn.close()
     return fila
